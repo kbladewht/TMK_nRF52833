@@ -1,0 +1,4 @@
+Output/
+*.jlink
+*.emSession
+flash_placement.xml
