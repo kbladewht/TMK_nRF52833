@@ -13,9 +13,7 @@ extern "C" {
 //不要NRF的LED和按键配置
 #define LED_NUMBER 0
 #define BUTTONS_NUMBER 0
-//虽然不用NRF自己的LED和按键配置，但这两个设置需要保留以避免报错
-#define LEDS_ACTIVE_STATE 0
-#define BUTTONS_ACTIVE_STATE 0
+
 
 //State indicatior LED gpio
 #define STATE_LED NRF_GPIO_PIN_MAP(0, 25)

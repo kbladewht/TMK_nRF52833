@@ -53,10 +53,71 @@
  * Also it would accept pairing requests from any peer device.
  */
 
+//Std Headers
 #include <stdint.h>
 #include <string.h>
+//SDK Headers
+#include "nrf_pwr_mgmt.h"
+#include "app_timer.h"
+#include "app_scheduler.h"
+//Own Headers
+#include "ble_service.h"
+#include "kb_nrf_print.h"
 
-#include <ble_service.h>
+
+/**@brief Function for the Timer initialization.
+ *
+ * @details Initializes the timer module.
+ */
+void timers_init(void)
+{
+    ret_code_t err_code;
+    err_code = app_timer_init();
+    APP_ERROR_CHECK(err_code);
+}
+
+/**@brief Function for initializing power management.
+ */
+static void power_management_init(void)
+{
+    ret_code_t err_code;
+    err_code = nrf_pwr_mgmt_init();
+    APP_ERROR_CHECK(err_code);
+}
+
+
+/**@brief Function for handling the idle state (main loop).
+ *
+ * @details If there is no pending log operation, then sleep until next the next event occurs.
+ */
+static void idle_state_handle(void)
+{
+    app_sched_execute();
+    if (NRF_LOG_PROCESS() == false)
+    {
+        nrf_pwr_mgmt_run();
+    }
+}
+static void keyboard_scan_handler(void* p_context)
+{
+    //keyboard_task();
+    /*这里接入TMK*/
+}
+
+APP_TIMER_DEF(m_keyboard_scan_timer_id);
+
+void init_and_start_scan_timer(void)
+{
+    ret_code_t err_code = app_timer_create(&m_keyboard_scan_timer_id,
+        APP_TIMER_MODE_REPEATED,
+        keyboard_scan_handler);
+    APP_ERROR_CHECK(err_code);
+
+    err_code = app_timer_start(m_keyboard_scan_timer_id,  APP_TIMER_TICKS(10), NULL);
+    APP_ERROR_CHECK(err_code);
+
+}
+
 
 
 /**@brief Function for application main entry.
@@ -68,22 +129,28 @@ int main(void)
     // Initialize.
     log_init();
     timers_init();
-    power_management_init();
-    ble_stack_init();
     scheduler_init();
+
+    power_management_init();
+
+    ble_stack_init();
     gap_params_init();
     gatt_init();
     advertising_init();
     services_init();
-    sensor_simulator_init();
+
     conn_params_init();
     buffer_init();
     peer_manager_init();
 
     // Start execution.
-    NRF_LOG_INFO("HID Keyboard example started.");
-    timers_start();
+    kb_nrf_print("HID Keyboard example started.");
+
     advertising_start(erase_bonds);
+    //keyboard init()
+    //host set driver
+    init_and_start_scan_timer();
+    //power management init and start
 
     // Enter main loop.
     for (;;)

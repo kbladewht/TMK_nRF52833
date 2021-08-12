@@ -73,7 +73,7 @@
 #include "ble_dis.h"
 #include "ble_conn_params.h"
 #include "sensorsim.h"
-#include "bsp_btn_ble.h"
+
 #include "app_scheduler.h"
 #include "nrf_sdh.h"
 #include "nrf_sdh_soc.h"
@@ -87,8 +87,9 @@
 #include "nrf_pwr_mgmt.h"
 #include "peer_manager_handler.h"
 
+#include "kb_nrf_print.h"
 
-#define SHIFT_BUTTON_ID                     1                                          /**< Button used as 'SHIFT' Key. */
+
 
 #define DEVICE_NAME                         "nRF52833_Keyboard"                        /**< Name of device. Will be included in the advertising data. */
 #define MANUFACTURER_NAME                   "NordicSemiconductor"                      /**< Manufacturer. Will be passed to Device Information Service. */
@@ -267,7 +268,7 @@ void whitelist_set(pm_peer_id_list_skip_t skip)
     ret_code_t err_code = pm_peer_id_list(peer_ids, &peer_id_count, PM_PEER_ID_INVALID, skip);
     APP_ERROR_CHECK(err_code);
 
-    NRF_LOG_INFO("\tm_whitelist_peer_cnt %d, MAX_PEERS_WLIST %d",
+    kb_nrf_print("\tm_whitelist_peer_cnt %d, MAX_PEERS_WLIST %d",
                    peer_id_count + 1,
                    BLE_GAP_WHITELIST_ADDR_MAX_COUNT);
 
@@ -299,7 +300,7 @@ void delete_bonds(void)
 {
     ret_code_t err_code;
 
-    NRF_LOG_INFO("Erase bonds!");
+    kb_nrf_print("Erase bonds!");
 
     err_code = pm_peers_delete();
     APP_ERROR_CHECK(err_code);
@@ -348,7 +349,7 @@ void pm_evt_handler(pm_evt_t const * p_evt)
             if (     p_evt->params.peer_data_update_succeeded.flash_changed
                  && (p_evt->params.peer_data_update_succeeded.data_id == PM_PEER_DATA_ID_BONDING))
             {
-                NRF_LOG_INFO("New Bond, add the peer to the whitelist if possible");
+                kb_nrf_print("New Bond, add the peer to the whitelist if possible");
                 // Note: You should check on what kind of white list policy your application should use.
 
                 whitelist_set(PM_PEER_ID_LIST_SKIP_NO_ID_ADDR);
@@ -418,25 +419,6 @@ void battery_level_meas_timeout_handler(void * p_context)
 {
     UNUSED_PARAMETER(p_context);
     battery_level_update();
-}
-
-
-/**@brief Function for the Timer initialization.
- *
- * @details Initializes the timer module.
- */
-void timers_init(void)
-{
-    ret_code_t err_code;
-
-    err_code = app_timer_init();
-    APP_ERROR_CHECK(err_code);
-
-    // Create battery timer.
-    err_code = app_timer_create(&m_battery_timer_id,
-                                APP_TIMER_MODE_REPEATED,
-                                battery_level_meas_timeout_handler);
-    APP_ERROR_CHECK(err_code);
 }
 
 
@@ -696,19 +678,6 @@ void services_init(void)
     dis_init();
     bas_init();
     hids_init();
-}
-
-
-/**@brief Function for initializing the battery sensor simulator.
- */
-void sensor_simulator_init(void)
-{
-    m_battery_sim_cfg.min          = MIN_BATTERY_LEVEL;
-    m_battery_sim_cfg.max          = MAX_BATTERY_LEVEL;
-    m_battery_sim_cfg.incr         = BATTERY_LEVEL_INCREMENT;
-    m_battery_sim_cfg.start_at_max = true;
-
-    sensorsim_init(&m_battery_sim_state, &m_battery_sim_cfg);
 }
 
 
@@ -1026,14 +995,6 @@ void on_hid_rep_char_write(ble_hids_evt_t * p_evt)
 void sleep_mode_enter(void)
 {
     ret_code_t err_code;
-
-    err_code = bsp_indication_set(BSP_INDICATE_IDLE);
-    APP_ERROR_CHECK(err_code);
-
-    // Prepare wakeup buttons.
-    err_code = bsp_btn_ble_sleep_mode_prepare();
-    APP_ERROR_CHECK(err_code);
-
     // Go to system-off mode (this function will not return; wakeup will cause a reset).
     err_code = sd_power_system_off();
     APP_ERROR_CHECK(err_code);
@@ -1086,38 +1047,32 @@ void on_adv_evt(ble_adv_evt_t ble_adv_evt)
     switch (ble_adv_evt)
     {
         case BLE_ADV_EVT_DIRECTED_HIGH_DUTY:
-            NRF_LOG_INFO("High Duty Directed advertising.");
-            err_code = bsp_indication_set(BSP_INDICATE_ADVERTISING_DIRECTED);
+            kb_nrf_print("High Duty Directed advertising.");
             APP_ERROR_CHECK(err_code);
             break;
 
         case BLE_ADV_EVT_DIRECTED:
-            NRF_LOG_INFO("Directed advertising.");
-            err_code = bsp_indication_set(BSP_INDICATE_ADVERTISING_DIRECTED);
+            kb_nrf_print("Directed advertising.");
             APP_ERROR_CHECK(err_code);
             break;
 
         case BLE_ADV_EVT_FAST:
-            NRF_LOG_INFO("Fast advertising.");
-            err_code = bsp_indication_set(BSP_INDICATE_ADVERTISING);
+            kb_nrf_print("Fast advertising.");
             APP_ERROR_CHECK(err_code);
             break;
 
         case BLE_ADV_EVT_SLOW:
-            NRF_LOG_INFO("Slow advertising.");
-            err_code = bsp_indication_set(BSP_INDICATE_ADVERTISING_SLOW);
+            kb_nrf_print("Slow advertising.");
             APP_ERROR_CHECK(err_code);
             break;
 
         case BLE_ADV_EVT_FAST_WHITELIST:
-            NRF_LOG_INFO("Fast advertising with whitelist.");
-            err_code = bsp_indication_set(BSP_INDICATE_ADVERTISING_WHITELIST);
+            kb_nrf_print("Fast advertising with whitelist.");
             APP_ERROR_CHECK(err_code);
             break;
 
         case BLE_ADV_EVT_SLOW_WHITELIST:
-            NRF_LOG_INFO("Slow advertising with whitelist.");
-            err_code = bsp_indication_set(BSP_INDICATE_ADVERTISING_WHITELIST);
+            kb_nrf_print("Slow advertising with whitelist.");
             APP_ERROR_CHECK(err_code);
             break;
 
@@ -1135,7 +1090,7 @@ void on_adv_evt(ble_adv_evt_t ble_adv_evt)
             err_code = pm_whitelist_get(whitelist_addrs, &addr_cnt,
                                         whitelist_irks,  &irk_cnt);
             APP_ERROR_CHECK(err_code);
-            NRF_LOG_DEBUG("pm_whitelist_get returns %d addr in whitelist and %d irk whitelist",
+            kb_nrf_dprint("pm_whitelist_get returns %d addr in whitelist and %d irk whitelist",
                           addr_cnt, irk_cnt);
 
             // Set the correct identities list (no excluding peers with no Central Address Resolution).
@@ -1190,16 +1145,15 @@ void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
     switch (p_ble_evt->header.evt_id)
     {
         case BLE_GAP_EVT_CONNECTED:
-            NRF_LOG_INFO("Connected");
-            err_code = bsp_indication_set(BSP_INDICATE_CONNECTED);
-            APP_ERROR_CHECK(err_code);
+            kb_nrf_print("Connected");
+
             m_conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
             err_code = nrf_ble_qwr_conn_handle_assign(&m_qwr, m_conn_handle);
             APP_ERROR_CHECK(err_code);
             break;
 
         case BLE_GAP_EVT_DISCONNECTED:
-            NRF_LOG_INFO("Disconnected");
+            kb_nrf_print("Disconnected");
             // Dequeue all keys without transmission.
             (void) buffer_dequeue(false);
 
@@ -1208,15 +1162,12 @@ void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
             // Reset m_caps_on variable. Upon reconnect, the HID host will re-send the Output
             // report containing the Caps lock state.
             m_caps_on = false;
-            // disabling alert 3. signal - used for capslock ON
-            err_code = bsp_indication_set(BSP_INDICATE_ALERT_OFF);
-            APP_ERROR_CHECK(err_code);
 
             break; // BLE_GAP_EVT_DISCONNECTED
 
         case BLE_GAP_EVT_PHY_UPDATE_REQUEST:
         {
-            NRF_LOG_DEBUG("PHY update request.");
+            kb_nrf_dprint("PHY update request.");
             ble_gap_phys_t const phys =
             {
                 .rx_phys = BLE_GAP_PHY_AUTO,
@@ -1233,7 +1184,7 @@ void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
 
         case BLE_GATTC_EVT_TIMEOUT:
             // Disconnect on GATT Client timeout event.
-            NRF_LOG_DEBUG("GATT Client Timeout.");
+            kb_nrf_dprint("GATT Client Timeout.");
             err_code = sd_ble_gap_disconnect(p_ble_evt->evt.gattc_evt.conn_handle,
                                              BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
             APP_ERROR_CHECK(err_code);
@@ -1241,7 +1192,7 @@ void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
 
         case BLE_GATTS_EVT_TIMEOUT:
             // Disconnect on GATT Server timeout event.
-            NRF_LOG_DEBUG("GATT Server Timeout.");
+            kb_nrf_dprint("GATT Server Timeout.");
             err_code = sd_ble_gap_disconnect(p_ble_evt->evt.gatts_evt.conn_handle,
                                              BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
             APP_ERROR_CHECK(err_code);
@@ -1361,16 +1312,6 @@ void advertising_init(void)
 }
 
 
-/**@brief Function for initializing the nrf log module.
- */
-void log_init(void)
-{
-    ret_code_t err_code = NRF_LOG_INIT(NULL);
-    APP_ERROR_CHECK(err_code);
-
-    NRF_LOG_DEFAULT_BACKENDS_INIT();
-}
-
 
 /**@brief Function for initializing power management.
  */
@@ -1379,18 +1320,4 @@ void power_management_init(void)
     ret_code_t err_code;
     err_code = nrf_pwr_mgmt_init();
     APP_ERROR_CHECK(err_code);
-}
-
-
-/**@brief Function for handling the idle state (main loop).
- *
- * @details If there is no pending log operation, then sleep until next the next event occurs.
- */
-void idle_state_handle(void)
-{
-    app_sched_execute();
-    if (NRF_LOG_PROCESS() == false)
-    {
-        nrf_pwr_mgmt_run();
-    }
 }
