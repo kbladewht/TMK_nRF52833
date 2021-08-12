@@ -95,7 +95,7 @@
     </folder>
     <folder Name="Application">
       <file file_name="./SRC/main.c" />
-      <folder Name="config">
+      <folder Name="Config">
         <file file_name="SRC/config/sdk_config.h" />
         <file file_name="SRC/config/config.h" />
       </folder>
@@ -103,9 +103,13 @@
         <file file_name="SRC/BLE/ble_service.h" />
         <file file_name="SRC/BLE/ble_service.c" />
       </folder>
-      <folder Name="log">
+      <folder Name="Log">
         <file file_name="SRC/log/kb_nrf_print.c" />
         <file file_name="SRC/log/kb_nrf_print.h" />
+      </folder>
+      <folder Name="Protocol">
+        <file file_name="SRC/Protocol/wait_api.h" />
+        <file file_name="SRC/Protocol/timer.c" />
       </folder>
     </folder>
     <folder Name="nRF_Segger_RTT">

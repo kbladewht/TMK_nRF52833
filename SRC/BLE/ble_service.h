@@ -3,10 +3,6 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "nrf_log.h"
-#include "nrf_log_ctrl.h"
-#include "nrf_log_default_backends.h"
-    
 
     void ble_stack_init(void);
     void scheduler_init(void);
@@ -14,7 +10,6 @@
     void gatt_init(void);
     void advertising_init(void);
     void services_init(void);
-
     void conn_params_init(void);
     void buffer_init(void);
     void peer_manager_init(void);
