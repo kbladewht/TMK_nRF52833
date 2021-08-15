@@ -548,7 +548,7 @@ uint32_t ble_advertising_start(ble_advertising_t * const p_advertising,
     {
         return NRF_ERROR_INVALID_STATE;
     }
-
+    
     p_advertising->adv_mode_current = advertising_mode;
 
     memset(&p_advertising->peer_address, 0, sizeof(p_advertising->peer_address));

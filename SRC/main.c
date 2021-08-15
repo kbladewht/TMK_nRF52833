@@ -60,9 +60,14 @@
 #include "nrf_pwr_mgmt.h"
 #include "app_timer.h"
 #include "app_scheduler.h"
+#include "nrf_log_ctrl.h"
+//TMK Headers
+#include "keyboard.h"
+#include "host.h"
 //Own Headers
 #include "ble_service.h"
 #include "kb_nrf_print.h"
+#include "kb_nrf_driver.h"
 
 
 /**@brief Function for the Timer initialization.
@@ -98,10 +103,10 @@ static void idle_state_handle(void)
         nrf_pwr_mgmt_run();
     }
 }
+
 static void keyboard_scan_handler(void* p_context)
 {
-    //keyboard_task();
-    /*这里接入TMK*/
+    keyboard_task();
 }
 
 APP_TIMER_DEF(m_keyboard_scan_timer_id);
@@ -124,7 +129,7 @@ void init_and_start_scan_timer(void)
  */
 int main(void)
 {
-    bool erase_bonds;
+    bool erase_bonds = false;
 
     // Initialize.
     log_init();
@@ -147,8 +152,8 @@ int main(void)
     kb_nrf_print("HID Keyboard example started.");
 
     advertising_start(erase_bonds);
-    //keyboard init()
-    //host set driver
+    keyboard_init();
+    host_set_driver(&kb_nrf_driver);
     init_and_start_scan_timer();
     //power management init and start
 
@@ -160,6 +165,3 @@ int main(void)
 }
 
 
-/**
- * @}
- */

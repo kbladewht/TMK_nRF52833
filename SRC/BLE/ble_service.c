@@ -319,8 +319,9 @@ void advertising_start(bool erase_bonds)
     else
     {
         whitelist_set(PM_PEER_ID_LIST_SKIP_NO_ID_ADDR);
-
+        kb_nrf_print("whitelist_set");
         ret_code_t ret = ble_advertising_start(&m_advertising, BLE_ADV_MODE_FAST);
+        kb_nrf_print("ble_advertising_start");
         APP_ERROR_CHECK(ret);
     }
 }
@@ -1048,32 +1049,26 @@ void on_adv_evt(ble_adv_evt_t ble_adv_evt)
     {
         case BLE_ADV_EVT_DIRECTED_HIGH_DUTY:
             kb_nrf_print("High Duty Directed advertising.");
-            APP_ERROR_CHECK(err_code);
             break;
 
         case BLE_ADV_EVT_DIRECTED:
             kb_nrf_print("Directed advertising.");
-            APP_ERROR_CHECK(err_code);
             break;
 
         case BLE_ADV_EVT_FAST:
             kb_nrf_print("Fast advertising.");
-            APP_ERROR_CHECK(err_code);
             break;
 
         case BLE_ADV_EVT_SLOW:
             kb_nrf_print("Slow advertising.");
-            APP_ERROR_CHECK(err_code);
             break;
 
         case BLE_ADV_EVT_FAST_WHITELIST:
             kb_nrf_print("Fast advertising with whitelist.");
-            APP_ERROR_CHECK(err_code);
             break;
 
         case BLE_ADV_EVT_SLOW_WHITELIST:
             kb_nrf_print("Slow advertising with whitelist.");
-            APP_ERROR_CHECK(err_code);
             break;
 
         case BLE_ADV_EVT_IDLE:
@@ -1212,20 +1207,16 @@ void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
 void ble_stack_init(void)
 {
     ret_code_t err_code;
-
     err_code = nrf_sdh_enable_request();
     APP_ERROR_CHECK(err_code);
-
     // Configure the BLE stack using the default settings.
     // Fetch the start address of the application RAM.
     uint32_t ram_start = 0;
     err_code = nrf_sdh_ble_default_cfg_set(APP_BLE_CONN_CFG_TAG, &ram_start);
     APP_ERROR_CHECK(err_code);
-
     // Enable BLE stack.
     err_code = nrf_sdh_ble_enable(&ram_start);
     APP_ERROR_CHECK(err_code);
-
     // Register a handler for BLE events.
     NRF_SDH_BLE_OBSERVER(m_ble_observer, APP_BLE_OBSERVER_PRIO, ble_evt_handler, NULL);
 }
