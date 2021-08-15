@@ -186,10 +186,12 @@ uint8_t matrix_scan(void)
 {
     for(uint8_t i = 0; i < MATRIX_ROWS; i++){
         select_row(i);
-        wait_us(50);// wait until value stable
+        wait_us(25);// wait until value stable
         matrix_row_t cols = read_cols();
         queInsert(&rowQueues[i], cols);
         matrix[i] = queResult(rowQueues[i]);
+        unselect_row(i);
+        wait_us(25);
     }
     wait_ms(DEBOUNCE_SAMPLE_INTERVAL);//每隔一个INTERVAL执行一次
     return 1;

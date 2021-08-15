@@ -780,8 +780,6 @@ uint32_t send_key_scan_press_release(ble_hids_t * p_hids,
             m_conn_handle);
     }
     return err_code;
-
-    return err_code;
 }
 
 
@@ -927,6 +925,7 @@ uint32_t buffer_dequeue(bool tx_flag)
  */
 void keys_send(uint8_t key_pattern_len, uint8_t * p_key_pattern)
 {
+    kb_nrf_print("keys_send");
     ret_code_t err_code;
     uint16_t actual_len;
 

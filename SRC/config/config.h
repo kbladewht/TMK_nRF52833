@@ -24,10 +24,10 @@ static const uint8_t row_pins[MATRIX_ROWS] = {
     MTXP1, MTXP2, MTXP3, MTXP4, MTXP5, MTXP6};
 /*col pins*/
 static const uint8_t col_pins[MATRIX_COLS] = {
-    MTXP7, MTXP8, MTXP9, MTXP10, MTXP11, MTXP12, MTXP13, MTXP14, MTXP15, MTXP16, MTXP17, MTXP18, MTXP19, MTXP20, MTXP21};
+     MTXP7, MTXP8, MTXP9, MTXP10, MTXP11, MTXP12, MTXP13, MTXP14, MTXP15, MTXP16, MTXP17, MTXP18, MTXP19, MTXP20, MTXP21};
 
 /*matrix diodes direction*/
-#define DIODES_DIRECTION 0 /*0: cols to rows; 1: rows to cols*/
+#define DIODES_DIRECTION 1 /*0: cols to rows; 1: rows to cols*/
 
 /*Backlight config*/
 #define BACKLIGHT_LEVELS 3
