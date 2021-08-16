@@ -53,7 +53,7 @@
  
 
 #ifndef BSP_BTN_BLE_ENABLED
-#define BSP_BTN_BLE_ENABLED 0
+#define BSP_BTN_BLE_ENABLED 1
 #endif
 
 // </h> 
@@ -4553,7 +4553,7 @@
 // <e> NRFX_USBD_ENABLED - nrfx_usbd - USBD peripheral driver
 //==========================================================
 #ifndef NRFX_USBD_ENABLED
-#define NRFX_USBD_ENABLED 1
+#define NRFX_USBD_ENABLED 0
 #endif
 // <o> NRFX_USBD_CONFIG_IRQ_PRIORITY  - Interrupt priority
  
@@ -4813,7 +4813,7 @@
 // <e> POWER_ENABLED - nrf_drv_power - POWER peripheral driver - legacy layer
 //==========================================================
 #ifndef POWER_ENABLED
-#define POWER_ENABLED 1
+#define POWER_ENABLED 0
 #endif
 // <o> POWER_CONFIG_IRQ_PRIORITY  - Interrupt priority
  
@@ -5895,7 +5895,7 @@
 // <e> USBD_ENABLED - nrf_drv_usbd - Software Component
 //==========================================================
 #ifndef USBD_ENABLED
-#define USBD_ENABLED 1
+#define USBD_ENABLED 0
 #endif
 // <o> USBD_CONFIG_IRQ_PRIORITY  - Interrupt priority
  
@@ -7577,7 +7577,7 @@
 // <e> NRF_LOG_BACKEND_UART_ENABLED - nrf_log_backend_uart - Log UART backend
 //==========================================================
 #ifndef NRF_LOG_BACKEND_UART_ENABLED
-#define NRF_LOG_BACKEND_UART_ENABLED 0
+#define NRF_LOG_BACKEND_UART_ENABLED 1
 #endif
 // <o> NRF_LOG_BACKEND_UART_TX_PIN - UART TX pin 
 #ifndef NRF_LOG_BACKEND_UART_TX_PIN

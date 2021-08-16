@@ -13,7 +13,7 @@
 #define DEVICE_VER 0x0001
 #define MANUFACTURER TMK
 #define PRODUCT SCKB
-#define DESCRIPTION    TMK Keyboard with nRF52833
+#define DESCRIPTION     Self Config Keyboard with nRF52833
 
 /* key matrix size */
 #define MATRIX_ROWS 6
@@ -27,7 +27,7 @@ static const uint8_t col_pins[MATRIX_COLS] = {
      MTXP7, MTXP8, MTXP9, MTXP10, MTXP11, MTXP12, MTXP13, MTXP14, MTXP15, MTXP16, MTXP17, MTXP18, MTXP19, MTXP20, MTXP21};
 
 /*matrix diodes direction*/
-#define DIODES_DIRECTION 0 /*0: cols to rows; 1: rows to cols*/
+#define DIODES_DIRECTION 1 /*0: cols to rows; 1: rows to cols*/
 
 /*Backlight config*/
 #define BACKLIGHT_LEVELS 3
