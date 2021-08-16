@@ -65,6 +65,7 @@
 #include "keyboard.h"
 #include "host.h"
 //Own Headers
+#include "board_support.h"
 #include "ble_service.h"
 #include "kb_nrf_print.h"
 #include "kb_nrf_driver.h"
@@ -133,6 +134,9 @@ int main(void)
 
     // Initialize.
     log_init();
+
+    board_init();
+
     timers_init();
     scheduler_init();
 
@@ -149,7 +153,7 @@ int main(void)
     peer_manager_init();
 
     // Start execution.
-    kb_nrf_print("HID Keyboard example started.");
+    kb_nrf_print("TMK Keyboard Start");
 
     advertising_start(erase_bonds);
     keyboard_init();

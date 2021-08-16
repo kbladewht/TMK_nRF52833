@@ -2,7 +2,12 @@
 Running TMK on nRF52833
 
 ## Current Status
-Already added tmk-core as sub-module
+TMK fitted
 
 ## Next Step
-Protocols, including keyboard matrix, light control, etc.
+Ble services: battery voltage measurement
+Power management
+State light control(Caplck, BT conn)
+Backlight Control(single color, only luminance adjustment, with PWM)
+Encoder
+dual Mod: BLE HID and USB HID
