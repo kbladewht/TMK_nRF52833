@@ -7,9 +7,9 @@
 #include "wait.h"
 #include "config.h"
 
-#ifdef KB_NRF_DEBUG
-    #include "kb_nrf_print.h"
-#endif
+#include "nrf_log.h"
+#include "nrf_log_ctrl.h"
+#include "nrf_log_default_backends.h"
 
 static matrix_row_t matrix[MATRIX_ROWS];
 static void select_row(uint8_t row);
@@ -130,7 +130,7 @@ static void init_rows(void)
 void matrix_init(void)
 {
     #ifdef KB_NRF_DEBUG
-    kb_nrf_print("matrix init");
+    NRF_LOG_INFO("matrix init");
     #endif
     init_cols();
     init_rows();
@@ -200,7 +200,7 @@ uint8_t matrix_scan(void)
 void matrix_print(void)
 {
     #ifdef KB_NRF_DEBUG
-      kb_nrf_print("matrix changed");
+      NRF_LOG_INFO("matrix changed");
     #endif 
 }
 

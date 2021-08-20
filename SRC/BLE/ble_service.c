@@ -87,8 +87,9 @@
 #include "nrf_pwr_mgmt.h"
 #include "peer_manager_handler.h"
 
-#include "kb_nrf_print.h"
-
+#include "nrf_log.h"
+#include "nrf_log_ctrl.h"
+#include "nrf_log_default_backends.h"
 
 
 #define DEVICE_NAME                         "nRF52833_Keyboard"                        /**< Name of device. Will be included in the advertising data. */
@@ -98,9 +99,6 @@
 #define APP_BLE_CONN_CFG_TAG                1                                          /**< A tag identifying the SoftDevice BLE configuration. */
 
 #define BATTERY_LEVEL_MEAS_INTERVAL         APP_TIMER_TICKS(2000)                      /**< Battery level measurement interval (ticks). */
-#define MIN_BATTERY_LEVEL                   81                                         /**< Minimum simulated battery level. */
-#define MAX_BATTERY_LEVEL                   100                                        /**< Maximum simulated battery level. */
-#define BATTERY_LEVEL_INCREMENT             1                                          /**< Increment between each simulated battery level measurement. */
 
 #define PNP_ID_VENDOR_ID_SOURCE             0x02                                       /**< Vendor ID Source. */
 #define PNP_ID_VENDOR_ID                    0x1915                                     /**< Vendor ID. */
@@ -214,7 +212,7 @@ typedef struct
 
 STATIC_ASSERT(sizeof(buffer_list_t) % 4 == 0);
 
-
+/*Define BLE Services*/
 APP_TIMER_DEF(m_battery_timer_id);                                  /**< Battery timer. */
 BLE_HIDS_DEF(m_hids,                                                /**< Structure used to identify the HID service. */
              NRF_SDH_BLE_TOTAL_LINK_COUNT,
@@ -237,153 +235,63 @@ static buffer_list_t     buffer_list;                               /**< List to
 static ble_uuid_t m_adv_uuids[] = {{BLE_UUID_HUMAN_INTERFACE_DEVICE_SERVICE, BLE_UUID_TYPE_BLE}};
 
 
-void on_hids_evt(ble_hids_t * p_hids, ble_hids_evt_t * p_evt);
-
-/**@brief Callback function for asserts in the SoftDevice.
- *
- * @details This function will be called in case of an assert in the SoftDevice.
- *
- * @warning This handler is an example only and does not fit a final product. You need to analyze
- *          how your product is supposed to react in case of Assert.
- * @warning On assert from the SoftDevice, the system can only recover on reset.
- *
- * @param[in]   line_num   Line number of the failing ASSERT call.
- * @param[in]   file_name  File name of the failing ASSERT call.
- */
-void assert_nrf_callback(uint16_t line_num, const uint8_t * p_file_name)
-{
-    app_error_handler(DEAD_BEEF, line_num, p_file_name);
-}
+/*-----------QWR Service----------*/
 
 
-/**@brief Function for setting filtered whitelist.
- *
- * @param[in] skip  Filter passed to @ref pm_peer_id_list.
- */
-void whitelist_set(pm_peer_id_list_skip_t skip)
-{
-    pm_peer_id_t peer_ids[BLE_GAP_WHITELIST_ADDR_MAX_COUNT];
-    uint32_t     peer_id_count = BLE_GAP_WHITELIST_ADDR_MAX_COUNT;
-
-    ret_code_t err_code = pm_peer_id_list(peer_ids, &peer_id_count, PM_PEER_ID_INVALID, skip);
-    APP_ERROR_CHECK(err_code);
-
-    kb_nrf_print("\tm_whitelist_peer_cnt %d, MAX_PEERS_WLIST %d",
-                   peer_id_count + 1,
-                   BLE_GAP_WHITELIST_ADDR_MAX_COUNT);
-
-    err_code = pm_whitelist_set(peer_ids, peer_id_count);
-    APP_ERROR_CHECK(err_code);
-}
-
-
-/**@brief Function for setting filtered device identities.
- *
- * @param[in] skip  Filter passed to @ref pm_peer_id_list.
- */
-void identities_set(pm_peer_id_list_skip_t skip)
-{
-    pm_peer_id_t peer_ids[BLE_GAP_DEVICE_IDENTITIES_MAX_COUNT];
-    uint32_t     peer_id_count = BLE_GAP_DEVICE_IDENTITIES_MAX_COUNT;
-
-    ret_code_t err_code = pm_peer_id_list(peer_ids, &peer_id_count, PM_PEER_ID_INVALID, skip);
-    APP_ERROR_CHECK(err_code);
-
-    err_code = pm_device_identities_list_set(peer_ids, peer_id_count);
-    APP_ERROR_CHECK(err_code);
-}
-
-
-/**@brief Clear bond information from persistent storage.
- */
-void delete_bonds(void)
-{
-    ret_code_t err_code;
-
-    kb_nrf_print("Erase bonds!");
-
-    err_code = pm_peers_delete();
-    APP_ERROR_CHECK(err_code);
-}
-
-
-/**@brief Function for starting advertising.
- */
-void advertising_start(bool erase_bonds)
-{
-    if (erase_bonds == true)
-    {
-        delete_bonds();
-        // Advertising is started by PM_EVT_PEERS_DELETE_SUCCEEDED event.
-    }
-    else
-    {
-        whitelist_set(PM_PEER_ID_LIST_SKIP_NO_ID_ADDR);
-        kb_nrf_print("whitelist_set");
-        ret_code_t ret = ble_advertising_start(&m_advertising, BLE_ADV_MODE_FAST);
-        kb_nrf_print("ble_advertising_start");
-        APP_ERROR_CHECK(ret);
-    }
-}
-
-
-/**@brief Function for handling Peer Manager events.
- *
- * @param[in] p_evt  Peer Manager event.
- */
-void pm_evt_handler(pm_evt_t const * p_evt)
-{
-    pm_handler_on_pm_evt(p_evt);
-    pm_handler_flash_clean(p_evt);
-
-    switch (p_evt->evt_id)
-    {
-        case PM_EVT_CONN_SEC_SUCCEEDED:
-            m_peer_id = p_evt->peer_id;
-            break;
-
-        case PM_EVT_PEERS_DELETE_SUCCEEDED:
-            advertising_start(false);
-            break;
-
-        case PM_EVT_PEER_DATA_UPDATE_SUCCEEDED:
-            if (     p_evt->params.peer_data_update_succeeded.flash_changed
-                 && (p_evt->params.peer_data_update_succeeded.data_id == PM_PEER_DATA_ID_BONDING))
-            {
-                kb_nrf_print("New Bond, add the peer to the whitelist if possible");
-                // Note: You should check on what kind of white list policy your application should use.
-
-                whitelist_set(PM_PEER_ID_LIST_SKIP_NO_ID_ADDR);
-            }
-            break;
-
-        default:
-            break;
-    }
-}
-
-
-/**@brief Function for handling Service errors.
+/**@brief Function for handling Queued Write Module errors.
  *
  * @details A pointer to this function will be passed to each service which may need to inform the
  *          application about an error.
  *
  * @param[in]   nrf_error   Error code containing information about what went wrong.
  */
-void service_error_handler(uint32_t nrf_error)
+void nrf_qwr_error_handler(uint32_t nrf_error)
 {
     APP_ERROR_HANDLER(nrf_error);
 }
 
 
-/**@brief Function for handling advertising errors.
- *
- * @param[in] nrf_error  Error code containing information about what went wrong.
+/**@brief Function for initializing the Queued Write Module.
  */
-void ble_advertising_error_handler(uint32_t nrf_error)
+void qwr_init(void)
 {
-    APP_ERROR_HANDLER(nrf_error);
+    ret_code_t         err_code;
+    nrf_ble_qwr_init_t qwr_init_obj = {0};
+
+    qwr_init_obj.error_handler = nrf_qwr_error_handler;
+
+    err_code = nrf_ble_qwr_init(&m_qwr, &qwr_init_obj);
+    APP_ERROR_CHECK(err_code);
 }
+
+
+/*----------DIS Service----------*/
+/**@brief Function for initializing Device Information Service.
+ */
+void dis_init(void)
+{
+    ret_code_t       err_code;
+    ble_dis_init_t   dis_init_obj;
+    ble_dis_pnp_id_t pnp_id;
+
+    pnp_id.vendor_id_source = PNP_ID_VENDOR_ID_SOURCE;
+    pnp_id.vendor_id        = PNP_ID_VENDOR_ID;
+    pnp_id.product_id       = PNP_ID_PRODUCT_ID;
+    pnp_id.product_version  = PNP_ID_PRODUCT_VERSION;
+
+    memset(&dis_init_obj, 0, sizeof(dis_init_obj));
+
+    ble_srv_ascii_to_utf8(&dis_init_obj.manufact_name_str, MANUFACTURER_NAME);
+    dis_init_obj.p_pnp_id = &pnp_id;
+
+    dis_init_obj.dis_char_rd_sec = SEC_JUST_WORKS;
+
+    err_code = ble_dis_init(&dis_init_obj);
+    APP_ERROR_CHECK(err_code);
+}
+
+
+/*----------Batt Service----------*/
 
 
 /**@brief Function for performing a battery measurement, and update the Battery Level characteristic in the Battery Service.
@@ -423,100 +331,6 @@ void battery_level_meas_timeout_handler(void * p_context)
 }
 
 
-/**@brief Function for the GAP initialization.
- *
- * @details This function sets up all the necessary GAP (Generic Access Profile) parameters of the
- *          device including the device name, appearance, and the preferred connection parameters.
- */
-void gap_params_init(void)
-{
-    ret_code_t              err_code;
-    ble_gap_conn_params_t   gap_conn_params;
-    ble_gap_conn_sec_mode_t sec_mode;
-
-    BLE_GAP_CONN_SEC_MODE_SET_OPEN(&sec_mode);
-
-    err_code = sd_ble_gap_device_name_set(&sec_mode,
-                                          (const uint8_t *)DEVICE_NAME,
-                                          strlen(DEVICE_NAME));
-    APP_ERROR_CHECK(err_code);
-
-    err_code = sd_ble_gap_appearance_set(BLE_APPEARANCE_HID_KEYBOARD);
-    APP_ERROR_CHECK(err_code);
-
-    memset(&gap_conn_params, 0, sizeof(gap_conn_params));
-
-    gap_conn_params.min_conn_interval = MIN_CONN_INTERVAL;
-    gap_conn_params.max_conn_interval = MAX_CONN_INTERVAL;
-    gap_conn_params.slave_latency     = SLAVE_LATENCY;
-    gap_conn_params.conn_sup_timeout  = CONN_SUP_TIMEOUT;
-
-    err_code = sd_ble_gap_ppcp_set(&gap_conn_params);
-    APP_ERROR_CHECK(err_code);
-}
-
-
-/**@brief Function for initializing the GATT module.
- */
-void gatt_init(void)
-{
-    ret_code_t err_code = nrf_ble_gatt_init(&m_gatt, NULL);
-    APP_ERROR_CHECK(err_code);
-}
-
-
-/**@brief Function for handling Queued Write Module errors.
- *
- * @details A pointer to this function will be passed to each service which may need to inform the
- *          application about an error.
- *
- * @param[in]   nrf_error   Error code containing information about what went wrong.
- */
-void nrf_qwr_error_handler(uint32_t nrf_error)
-{
-    APP_ERROR_HANDLER(nrf_error);
-}
-
-
-/**@brief Function for initializing the Queued Write Module.
- */
-void qwr_init(void)
-{
-    ret_code_t         err_code;
-    nrf_ble_qwr_init_t qwr_init_obj = {0};
-
-    qwr_init_obj.error_handler = nrf_qwr_error_handler;
-
-    err_code = nrf_ble_qwr_init(&m_qwr, &qwr_init_obj);
-    APP_ERROR_CHECK(err_code);
-}
-
-
-/**@brief Function for initializing Device Information Service.
- */
-void dis_init(void)
-{
-    ret_code_t       err_code;
-    ble_dis_init_t   dis_init_obj;
-    ble_dis_pnp_id_t pnp_id;
-
-    pnp_id.vendor_id_source = PNP_ID_VENDOR_ID_SOURCE;
-    pnp_id.vendor_id        = PNP_ID_VENDOR_ID;
-    pnp_id.product_id       = PNP_ID_PRODUCT_ID;
-    pnp_id.product_version  = PNP_ID_PRODUCT_VERSION;
-
-    memset(&dis_init_obj, 0, sizeof(dis_init_obj));
-
-    ble_srv_ascii_to_utf8(&dis_init_obj.manufact_name_str, MANUFACTURER_NAME);
-    dis_init_obj.p_pnp_id = &pnp_id;
-
-    dis_init_obj.dis_char_rd_sec = SEC_JUST_WORKS;
-
-    err_code = ble_dis_init(&dis_init_obj);
-    APP_ERROR_CHECK(err_code);
-}
-
-
 /**@brief Function for initializing Battery Service.
  */
 void bas_init(void)
@@ -537,6 +351,290 @@ void bas_init(void)
 
     err_code = ble_bas_init(&m_bas, &bas_init_obj);
     APP_ERROR_CHECK(err_code);
+}
+
+
+/**@brief Function for starting timers.
+ */
+void batt_timers_start(void)
+{
+    ret_code_t err_code;
+
+    err_code = app_timer_start(m_battery_timer_id, BATTERY_LEVEL_MEAS_INTERVAL, NULL);
+    APP_ERROR_CHECK(err_code);
+}
+
+
+/*----------HID Service----------*/
+
+
+/**@brief   Function for initializing the buffer queue used to key events that could not be
+ *          transmitted
+ *
+ * @warning This handler is an example only. You need to analyze how you wish to buffer or buffer at
+ *          all.
+ *
+ * @note    In case of HID keyboard, a temporary buffering could be employed to handle scenarios
+ *          where encryption is not yet enabled or there was a momentary link loss or there were no
+ *          Transmit buffers.
+ */
+void buffer_init(void)
+{
+    uint32_t buffer_count;
+
+    BUFFER_LIST_INIT();
+
+    for (buffer_count = 0; buffer_count < MAX_BUFFER_ENTRIES; buffer_count++)
+    {
+        BUFFER_ELEMENT_INIT(buffer_count);
+    }
+}
+
+
+/**@brief Function for enqueuing key scan patterns that could not be transmitted either completely
+ *        or partially.
+ *
+ * @warning This handler is an example only. You need to analyze how you wish to send the key
+ *          release.
+ *
+ * @param[in]  p_hids         Identifies the service for which Key Notifications are buffered.
+ * @param[in]  p_key_pattern  Pointer to key pattern.
+ * @param[in]  pattern_len    Length of key pattern.
+ * @param[in]  offset         Offset applied to Key Pattern when requesting a transmission on
+ *                            dequeue, @ref buffer_dequeue.
+ * @return     NRF_SUCCESS on success, else an error code indicating reason for failure.
+ */
+uint32_t buffer_enqueue(ble_hids_t * p_hids,
+                               uint8_t    * p_key_pattern,
+                               uint16_t     pattern_len,
+                               uint16_t     offset)
+{
+    buffer_entry_t * element;
+    uint32_t         err_code = NRF_SUCCESS;
+
+    if (BUFFER_LIST_FULL())
+    {
+        // Element cannot be buffered.
+        err_code = NRF_ERROR_NO_MEM;
+    }
+    else
+    {
+        // Make entry of buffer element and copy data.
+        element              = &buffer_list.buffer[(buffer_list.wp)];
+        element->p_instance  = p_hids;
+        element->p_data      = p_key_pattern;
+        element->data_offset = offset;
+        element->data_len    = pattern_len;
+
+        buffer_list.count++;
+        buffer_list.wp++;
+
+        if (buffer_list.wp == MAX_BUFFER_ENTRIES)
+        {
+            buffer_list.wp = 0;
+        }
+    }
+
+    return err_code;
+}
+
+
+/**@brief   Function for transmitting a key scan Press & Release Notification.
+ *
+ * @warning This handler is an example only. You need to analyze how you wish to send the key
+ *          release.
+ *
+ * @param[in]  p_instance     Identifies the service for which Key Notifications are requested.
+ * @param[in]  p_key_pattern  Pointer to key pattern.
+ * @param[in]  pattern_len    Length of key pattern. 0 < pattern_len < 7.
+ * @param[in]  pattern_offset Offset applied to Key Pattern for transmission.
+ * @param[out] actual_len     Provides actual length of Key Pattern transmitted, making buffering of
+ *                            rest possible if needed.
+ * @return     NRF_SUCCESS on success, NRF_ERROR_RESOURCES in case transmission could not be
+ *             completed due to lack of transmission buffer or other error codes indicating reason
+ *             for failure.
+ *
+ * @note       In case of NRF_ERROR_RESOURCES, remaining pattern that could not be transmitted
+ *             can be enqueued \ref buffer_enqueue function.
+ *             In case a pattern of 'cofFEe' is the p_key_pattern, with pattern_len as 6 and
+ *             pattern_offset as 0, the notifications as observed on the peer side would be
+ *             1>    'c', 'o', 'f', 'F', 'E', 'e'
+ *             2>    -  , 'o', 'f', 'F', 'E', 'e'
+ *             3>    -  ,   -, 'f', 'F', 'E', 'e'
+ *             4>    -  ,   -,   -, 'F', 'E', 'e'
+ *             5>    -  ,   -,   -,   -, 'E', 'e'
+ *             6>    -  ,   -,   -,   -,   -, 'e'
+ *             7>    -  ,   -,   -,   -,   -,  -
+ *             Here, '-' refers to release, 'c' refers to the key character being transmitted.
+ *             Therefore 7 notifications will be sent.
+ *             In case an offset of 4 was provided, the pattern notifications sent will be from 5-7
+ *             will be transmitted.
+ */
+uint32_t send_key_scan_press_release(ble_hids_t * p_hids,
+                                      uint8_t    * p_key_pattern,
+                                      uint16_t     pattern_len,
+                                      uint16_t     pattern_offset,
+                                      uint16_t   * p_actual_len)
+{
+    ret_code_t err_code = NRF_SUCCESS;
+    uint8_t index = 0;
+    if (m_in_boot_mode) {
+        if (index == 0) {
+            err_code = ble_hids_boot_kb_inp_rep_send(p_hids,
+                pattern_len,
+                p_key_pattern,
+                m_conn_handle);
+        }
+    } else {
+        err_code = ble_hids_inp_rep_send(p_hids,
+            index,
+            pattern_len,
+            p_key_pattern,
+            m_conn_handle);
+    }
+    return err_code;
+}
+
+
+
+
+/**@brief   Function to dequeue key scan patterns that could not be transmitted either completely of
+ *          partially.
+ *
+ * @warning This handler is an example only. You need to analyze how you wish to send the key
+ *          release.
+ *
+ * @param[in]  tx_flag   Indicative of whether the dequeue should result in transmission or not.
+ * @note       A typical example when all keys are dequeued with transmission is when link is
+ *             disconnected.
+ *
+ * @return     NRF_SUCCESS on success, else an error code indicating reason for failure.
+ */
+uint32_t buffer_dequeue(bool tx_flag)
+{
+    buffer_entry_t * p_element;
+    uint32_t         err_code = NRF_SUCCESS;
+    uint16_t         actual_len;
+
+    if (BUFFER_LIST_EMPTY())
+    {
+        err_code = NRF_ERROR_NOT_FOUND;
+    }
+    else
+    {
+        bool remove_element = true;
+
+        p_element = &buffer_list.buffer[(buffer_list.rp)];
+
+        if (tx_flag)
+        {
+            err_code = send_key_scan_press_release(p_element->p_instance,
+                                                   p_element->p_data,
+                                                   p_element->data_len,
+                                                   p_element->data_offset,
+                                                   &actual_len);
+            // An additional notification is needed for release of all keys, therefore check
+            // is for actual_len <= element->data_len and not actual_len < element->data_len
+            if ((err_code == NRF_ERROR_RESOURCES) && (actual_len <= p_element->data_len))
+            {
+                // Transmission could not be completed, do not remove the entry, adjust next data to
+                // be transmitted
+                p_element->data_offset = actual_len;
+                remove_element         = false;
+            }
+        }
+
+        if (remove_element)
+        {
+            BUFFER_ELEMENT_INIT(buffer_list.rp);
+
+            buffer_list.rp++;
+            buffer_list.count--;
+
+            if (buffer_list.rp == MAX_BUFFER_ENTRIES)
+            {
+                buffer_list.rp = 0;
+            }
+        }
+    }
+
+    return err_code;
+}
+
+
+/**@brief Function for handling the HID Report Characteristic Write event.
+ *
+ * @param[in]   p_evt   HID service event.
+ */
+void on_hid_rep_char_write(ble_hids_evt_t * p_evt)
+{
+    if (p_evt->params.char_write.char_id.rep_type == BLE_HIDS_REP_TYPE_OUTPUT)
+    {
+        ret_code_t err_code;
+        uint8_t  report_val;
+        uint8_t  report_index = p_evt->params.char_write.char_id.rep_index;
+
+        if (report_index == OUTPUT_REPORT_INDEX)
+        {
+            // This code assumes that the output report is one byte long. Hence the following
+            // static assert is made.
+            STATIC_ASSERT(OUTPUT_REPORT_MAX_LEN == 1);
+
+            err_code = ble_hids_outp_rep_get(&m_hids,
+                                             report_index,
+                                             OUTPUT_REPORT_MAX_LEN,
+                                             0,
+                                             m_conn_handle,
+                                             &report_val);
+            APP_ERROR_CHECK(err_code);
+        }
+    }
+}
+
+
+/**@brief Function for handling HID events.
+ *
+ * @details This function will be called for all HID events which are passed to the application.
+ *
+ * @param[in]   p_hids  HID service structure.
+ * @param[in]   p_evt   Event received from the HID service.
+ */
+void on_hids_evt(ble_hids_t * p_hids, ble_hids_evt_t * p_evt)
+{
+    switch (p_evt->evt_type)
+    {
+        case BLE_HIDS_EVT_BOOT_MODE_ENTERED:
+            m_in_boot_mode = true;
+            break;
+
+        case BLE_HIDS_EVT_REPORT_MODE_ENTERED:
+            m_in_boot_mode = false;
+            break;
+
+        case BLE_HIDS_EVT_REP_CHAR_WRITE:
+            on_hid_rep_char_write(p_evt);
+            break;
+
+        case BLE_HIDS_EVT_NOTIF_ENABLED:
+            break;
+
+        default:
+            // No implementation needed.
+            break;
+    }
+}
+
+
+/**@brief Function for handling Service errors.
+ *
+ * @details A pointer to this function will be passed to each service which may need to inform the
+ *          application about an error.
+ *
+ * @param[in]   nrf_error   Error code containing information about what went wrong.
+ */
+void service_error_handler(uint32_t nrf_error)
+{
+    APP_ERROR_HANDLER(nrf_error);
 }
 
 
@@ -671,253 +769,6 @@ void hids_init(void)
 }
 
 
-/**@brief Function for initializing services that will be used by the application.
- */
-void services_init(void)
-{
-    qwr_init();
-    dis_init();
-    bas_init();
-    hids_init();
-}
-
-
-/**@brief Function for handling a Connection Parameters error.
- *
- * @param[in]   nrf_error   Error code containing information about what went wrong.
- */
-void conn_params_error_handler(uint32_t nrf_error)
-{
-    APP_ERROR_HANDLER(nrf_error);
-}
-
-
-/**@brief Function for initializing the Connection Parameters module.
- */
-void conn_params_init(void)
-{
-    ret_code_t             err_code;
-    ble_conn_params_init_t cp_init;
-
-    memset(&cp_init, 0, sizeof(cp_init));
-
-    cp_init.p_conn_params                  = NULL;
-    cp_init.first_conn_params_update_delay = FIRST_CONN_PARAMS_UPDATE_DELAY;
-    cp_init.next_conn_params_update_delay  = NEXT_CONN_PARAMS_UPDATE_DELAY;
-    cp_init.max_conn_params_update_count   = MAX_CONN_PARAMS_UPDATE_COUNT;
-    cp_init.start_on_notify_cccd_handle    = BLE_GATT_HANDLE_INVALID;
-    cp_init.disconnect_on_fail             = false;
-    cp_init.evt_handler                    = NULL;
-    cp_init.error_handler                  = conn_params_error_handler;
-
-    err_code = ble_conn_params_init(&cp_init);
-    APP_ERROR_CHECK(err_code);
-}
-
-
-/**@brief Function for starting timers.
- */
-void timers_start(void)
-{
-    ret_code_t err_code;
-
-    err_code = app_timer_start(m_battery_timer_id, BATTERY_LEVEL_MEAS_INTERVAL, NULL);
-    APP_ERROR_CHECK(err_code);
-}
-
-
-/**@brief   Function for transmitting a key scan Press & Release Notification.
- *
- * @warning This handler is an example only. You need to analyze how you wish to send the key
- *          release.
- *
- * @param[in]  p_instance     Identifies the service for which Key Notifications are requested.
- * @param[in]  p_key_pattern  Pointer to key pattern.
- * @param[in]  pattern_len    Length of key pattern. 0 < pattern_len < 7.
- * @param[in]  pattern_offset Offset applied to Key Pattern for transmission.
- * @param[out] actual_len     Provides actual length of Key Pattern transmitted, making buffering of
- *                            rest possible if needed.
- * @return     NRF_SUCCESS on success, NRF_ERROR_RESOURCES in case transmission could not be
- *             completed due to lack of transmission buffer or other error codes indicating reason
- *             for failure.
- *
- * @note       In case of NRF_ERROR_RESOURCES, remaining pattern that could not be transmitted
- *             can be enqueued \ref buffer_enqueue function.
- *             In case a pattern of 'cofFEe' is the p_key_pattern, with pattern_len as 6 and
- *             pattern_offset as 0, the notifications as observed on the peer side would be
- *             1>    'c', 'o', 'f', 'F', 'E', 'e'
- *             2>    -  , 'o', 'f', 'F', 'E', 'e'
- *             3>    -  ,   -, 'f', 'F', 'E', 'e'
- *             4>    -  ,   -,   -, 'F', 'E', 'e'
- *             5>    -  ,   -,   -,   -, 'E', 'e'
- *             6>    -  ,   -,   -,   -,   -, 'e'
- *             7>    -  ,   -,   -,   -,   -,  -
- *             Here, '-' refers to release, 'c' refers to the key character being transmitted.
- *             Therefore 7 notifications will be sent.
- *             In case an offset of 4 was provided, the pattern notifications sent will be from 5-7
- *             will be transmitted.
- */
-uint32_t send_key_scan_press_release(ble_hids_t * p_hids,
-                                      uint8_t    * p_key_pattern,
-                                      uint16_t     pattern_len,
-                                      uint16_t     pattern_offset,
-                                      uint16_t   * p_actual_len)
-{
-    ret_code_t err_code = NRF_SUCCESS;
-    uint8_t index = 0;
-    if (m_in_boot_mode) {
-        if (index == 0) {
-            err_code = ble_hids_boot_kb_inp_rep_send(p_hids,
-                pattern_len,
-                p_key_pattern,
-                m_conn_handle);
-        }
-    } else {
-        err_code = ble_hids_inp_rep_send(p_hids,
-            index,
-            pattern_len,
-            p_key_pattern,
-            m_conn_handle);
-    }
-    return err_code;
-}
-
-
-/**@brief   Function for initializing the buffer queue used to key events that could not be
- *          transmitted
- *
- * @warning This handler is an example only. You need to analyze how you wish to buffer or buffer at
- *          all.
- *
- * @note    In case of HID keyboard, a temporary buffering could be employed to handle scenarios
- *          where encryption is not yet enabled or there was a momentary link loss or there were no
- *          Transmit buffers.
- */
-void buffer_init(void)
-{
-    uint32_t buffer_count;
-
-    BUFFER_LIST_INIT();
-
-    for (buffer_count = 0; buffer_count < MAX_BUFFER_ENTRIES; buffer_count++)
-    {
-        BUFFER_ELEMENT_INIT(buffer_count);
-    }
-}
-
-
-/**@brief Function for enqueuing key scan patterns that could not be transmitted either completely
- *        or partially.
- *
- * @warning This handler is an example only. You need to analyze how you wish to send the key
- *          release.
- *
- * @param[in]  p_hids         Identifies the service for which Key Notifications are buffered.
- * @param[in]  p_key_pattern  Pointer to key pattern.
- * @param[in]  pattern_len    Length of key pattern.
- * @param[in]  offset         Offset applied to Key Pattern when requesting a transmission on
- *                            dequeue, @ref buffer_dequeue.
- * @return     NRF_SUCCESS on success, else an error code indicating reason for failure.
- */
-uint32_t buffer_enqueue(ble_hids_t * p_hids,
-                               uint8_t    * p_key_pattern,
-                               uint16_t     pattern_len,
-                               uint16_t     offset)
-{
-    buffer_entry_t * element;
-    uint32_t         err_code = NRF_SUCCESS;
-
-    if (BUFFER_LIST_FULL())
-    {
-        // Element cannot be buffered.
-        err_code = NRF_ERROR_NO_MEM;
-    }
-    else
-    {
-        // Make entry of buffer element and copy data.
-        element              = &buffer_list.buffer[(buffer_list.wp)];
-        element->p_instance  = p_hids;
-        element->p_data      = p_key_pattern;
-        element->data_offset = offset;
-        element->data_len    = pattern_len;
-
-        buffer_list.count++;
-        buffer_list.wp++;
-
-        if (buffer_list.wp == MAX_BUFFER_ENTRIES)
-        {
-            buffer_list.wp = 0;
-        }
-    }
-
-    return err_code;
-}
-
-
-/**@brief   Function to dequeue key scan patterns that could not be transmitted either completely of
- *          partially.
- *
- * @warning This handler is an example only. You need to analyze how you wish to send the key
- *          release.
- *
- * @param[in]  tx_flag   Indicative of whether the dequeue should result in transmission or not.
- * @note       A typical example when all keys are dequeued with transmission is when link is
- *             disconnected.
- *
- * @return     NRF_SUCCESS on success, else an error code indicating reason for failure.
- */
-uint32_t buffer_dequeue(bool tx_flag)
-{
-    buffer_entry_t * p_element;
-    uint32_t         err_code = NRF_SUCCESS;
-    uint16_t         actual_len;
-
-    if (BUFFER_LIST_EMPTY())
-    {
-        err_code = NRF_ERROR_NOT_FOUND;
-    }
-    else
-    {
-        bool remove_element = true;
-
-        p_element = &buffer_list.buffer[(buffer_list.rp)];
-
-        if (tx_flag)
-        {
-            err_code = send_key_scan_press_release(p_element->p_instance,
-                                                   p_element->p_data,
-                                                   p_element->data_len,
-                                                   p_element->data_offset,
-                                                   &actual_len);
-            // An additional notification is needed for release of all keys, therefore check
-            // is for actual_len <= element->data_len and not actual_len < element->data_len
-            if ((err_code == NRF_ERROR_RESOURCES) && (actual_len <= p_element->data_len))
-            {
-                // Transmission could not be completed, do not remove the entry, adjust next data to
-                // be transmitted
-                p_element->data_offset = actual_len;
-                remove_element         = false;
-            }
-        }
-
-        if (remove_element)
-        {
-            BUFFER_ELEMENT_INIT(buffer_list.rp);
-
-            buffer_list.rp++;
-            buffer_list.count--;
-
-            if (buffer_list.rp == MAX_BUFFER_ENTRIES)
-            {
-                buffer_list.rp = 0;
-            }
-        }
-    }
-
-    return err_code;
-}
-
-
 /**@brief Function for sending sample key presses to the peer.
  *
  * @param[in]   key_pattern_len   Pattern length.
@@ -925,7 +776,7 @@ uint32_t buffer_dequeue(bool tx_flag)
  */
 void keys_send(uint8_t key_pattern_len, uint8_t * p_key_pattern)
 {
-    kb_nrf_print("keys_send");
+    NRF_LOG_INFO("keys_send");
     ret_code_t err_code;
     uint16_t actual_len;
 
@@ -958,172 +809,37 @@ void keys_send(uint8_t key_pattern_len, uint8_t * p_key_pattern)
 }
 
 
-/**@brief Function for handling the HID Report Characteristic Write event.
- *
- * @param[in]   p_evt   HID service event.
+
+/**@brief Function for initializing services that will be used by the application.
  */
-void on_hid_rep_char_write(ble_hids_evt_t * p_evt)
+void services_init(void)
 {
-    if (p_evt->params.char_write.char_id.rep_type == BLE_HIDS_REP_TYPE_OUTPUT)
-    {
-        ret_code_t err_code;
-        uint8_t  report_val;
-        uint8_t  report_index = p_evt->params.char_write.char_id.rep_index;
-
-        if (report_index == OUTPUT_REPORT_INDEX)
-        {
-            // This code assumes that the output report is one byte long. Hence the following
-            // static assert is made.
-            STATIC_ASSERT(OUTPUT_REPORT_MAX_LEN == 1);
-
-            err_code = ble_hids_outp_rep_get(&m_hids,
-                                             report_index,
-                                             OUTPUT_REPORT_MAX_LEN,
-                                             0,
-                                             m_conn_handle,
-                                             &report_val);
-            APP_ERROR_CHECK(err_code);
-        }
-    }
+    qwr_init();
+    dis_init();
+    bas_init();
+    hids_init();
 }
 
 
-/**@brief Function for putting the chip into sleep mode.
+
+
+/*-----------Basic Services-----------*/
+
+
+/**@brief Callback function for asserts in the SoftDevice.
  *
- * @note This function will not return.
+ * @details This function will be called in case of an assert in the SoftDevice.
+ *
+ * @warning This handler is an example only and does not fit a final product. You need to analyze
+ *          how your product is supposed to react in case of Assert.
+ * @warning On assert from the SoftDevice, the system can only recover on reset.
+ *
+ * @param[in]   line_num   Line number of the failing ASSERT call.
+ * @param[in]   file_name  File name of the failing ASSERT call.
  */
-void sleep_mode_enter(void)
+void assert_nrf_callback(uint16_t line_num, const uint8_t * p_file_name)
 {
-    ret_code_t err_code;
-    // Go to system-off mode (this function will not return; wakeup will cause a reset).
-    err_code = sd_power_system_off();
-    APP_ERROR_CHECK(err_code);
-}
-
-
-/**@brief Function for handling HID events.
- *
- * @details This function will be called for all HID events which are passed to the application.
- *
- * @param[in]   p_hids  HID service structure.
- * @param[in]   p_evt   Event received from the HID service.
- */
-void on_hids_evt(ble_hids_t * p_hids, ble_hids_evt_t * p_evt)
-{
-    switch (p_evt->evt_type)
-    {
-        case BLE_HIDS_EVT_BOOT_MODE_ENTERED:
-            m_in_boot_mode = true;
-            break;
-
-        case BLE_HIDS_EVT_REPORT_MODE_ENTERED:
-            m_in_boot_mode = false;
-            break;
-
-        case BLE_HIDS_EVT_REP_CHAR_WRITE:
-            on_hid_rep_char_write(p_evt);
-            break;
-
-        case BLE_HIDS_EVT_NOTIF_ENABLED:
-            break;
-
-        default:
-            // No implementation needed.
-            break;
-    }
-}
-
-
-/**@brief Function for handling advertising events.
- *
- * @details This function will be called for advertising events which are passed to the application.
- *
- * @param[in] ble_adv_evt  Advertising event.
- */
-void on_adv_evt(ble_adv_evt_t ble_adv_evt)
-{
-    ret_code_t err_code;
-
-    switch (ble_adv_evt)
-    {
-        case BLE_ADV_EVT_DIRECTED_HIGH_DUTY:
-            kb_nrf_print("High Duty Directed advertising.");
-            break;
-
-        case BLE_ADV_EVT_DIRECTED:
-            kb_nrf_print("Directed advertising.");
-            break;
-
-        case BLE_ADV_EVT_FAST:
-            kb_nrf_print("Fast advertising.");
-            break;
-
-        case BLE_ADV_EVT_SLOW:
-            kb_nrf_print("Slow advertising.");
-            break;
-
-        case BLE_ADV_EVT_FAST_WHITELIST:
-            kb_nrf_print("Fast advertising with whitelist.");
-            break;
-
-        case BLE_ADV_EVT_SLOW_WHITELIST:
-            kb_nrf_print("Slow advertising with whitelist.");
-            break;
-
-        case BLE_ADV_EVT_IDLE:
-            sleep_mode_enter();
-            break;
-
-        case BLE_ADV_EVT_WHITELIST_REQUEST:
-        {
-            ble_gap_addr_t whitelist_addrs[BLE_GAP_WHITELIST_ADDR_MAX_COUNT];
-            ble_gap_irk_t  whitelist_irks[BLE_GAP_WHITELIST_ADDR_MAX_COUNT];
-            uint32_t       addr_cnt = BLE_GAP_WHITELIST_ADDR_MAX_COUNT;
-            uint32_t       irk_cnt  = BLE_GAP_WHITELIST_ADDR_MAX_COUNT;
-
-            err_code = pm_whitelist_get(whitelist_addrs, &addr_cnt,
-                                        whitelist_irks,  &irk_cnt);
-            APP_ERROR_CHECK(err_code);
-            kb_nrf_dprint("pm_whitelist_get returns %d addr in whitelist and %d irk whitelist",
-                          addr_cnt, irk_cnt);
-
-            // Set the correct identities list (no excluding peers with no Central Address Resolution).
-            identities_set(PM_PEER_ID_LIST_SKIP_NO_IRK);
-
-            // Apply the whitelist.
-            err_code = ble_advertising_whitelist_reply(&m_advertising,
-                                                       whitelist_addrs,
-                                                       addr_cnt,
-                                                       whitelist_irks,
-                                                       irk_cnt);
-            APP_ERROR_CHECK(err_code);
-        } break; //BLE_ADV_EVT_WHITELIST_REQUEST
-
-        case BLE_ADV_EVT_PEER_ADDR_REQUEST:
-        {
-            pm_peer_data_bonding_t peer_bonding_data;
-
-            // Only Give peer address if we have a handle to the bonded peer.
-            if (m_peer_id != PM_PEER_ID_INVALID)
-            {
-                err_code = pm_peer_data_bonding_load(m_peer_id, &peer_bonding_data);
-                if (err_code != NRF_ERROR_NOT_FOUND)
-                {
-                    APP_ERROR_CHECK(err_code);
-
-                    // Manipulate identities to exclude peers with no Central Address Resolution.
-                    identities_set(PM_PEER_ID_LIST_SKIP_ALL);
-
-                    ble_gap_addr_t * p_peer_addr = &(peer_bonding_data.peer_ble_id.id_addr_info);
-                    err_code = ble_advertising_peer_addr_reply(&m_advertising, p_peer_addr);
-                    APP_ERROR_CHECK(err_code);
-                }
-            }
-        } break; //BLE_ADV_EVT_PEER_ADDR_REQUEST
-
-        default:
-            break;
-    }
+    app_error_handler(DEAD_BEEF, line_num, p_file_name);
 }
 
 
@@ -1139,7 +855,7 @@ void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
     switch (p_ble_evt->header.evt_id)
     {
         case BLE_GAP_EVT_CONNECTED:
-            kb_nrf_print("Connected");
+            NRF_LOG_INFO("Connected");
 
             m_conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
             err_code = nrf_ble_qwr_conn_handle_assign(&m_qwr, m_conn_handle);
@@ -1147,7 +863,7 @@ void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
             break;
 
         case BLE_GAP_EVT_DISCONNECTED:
-            kb_nrf_print("Disconnected");
+            NRF_LOG_INFO("Disconnected");
             // Dequeue all keys without transmission.
             (void) buffer_dequeue(false);
 
@@ -1161,7 +877,7 @@ void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
 
         case BLE_GAP_EVT_PHY_UPDATE_REQUEST:
         {
-            kb_nrf_dprint("PHY update request.");
+            NRF_LOG_DEBUG("PHY update request.");
             ble_gap_phys_t const phys =
             {
                 .rx_phys = BLE_GAP_PHY_AUTO,
@@ -1178,7 +894,7 @@ void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
 
         case BLE_GATTC_EVT_TIMEOUT:
             // Disconnect on GATT Client timeout event.
-            kb_nrf_dprint("GATT Client Timeout.");
+            NRF_LOG_DEBUG("GATT Client Timeout.");
             err_code = sd_ble_gap_disconnect(p_ble_evt->evt.gattc_evt.conn_handle,
                                              BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
             APP_ERROR_CHECK(err_code);
@@ -1186,7 +902,7 @@ void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
 
         case BLE_GATTS_EVT_TIMEOUT:
             // Disconnect on GATT Server timeout event.
-            kb_nrf_dprint("GATT Server Timeout.");
+            NRF_LOG_DEBUG("GATT Server Timeout.");
             err_code = sd_ble_gap_disconnect(p_ble_evt->evt.gatts_evt.conn_handle,
                                              BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
             APP_ERROR_CHECK(err_code);
@@ -1229,37 +945,178 @@ void scheduler_init(void)
 }
 
 
-/**@brief Function for the Peer Manager initialization.
+/**@brief Function for the GAP initialization.
+ *
+ * @details This function sets up all the necessary GAP (Generic Access Profile) parameters of the
+ *          device including the device name, appearance, and the preferred connection parameters.
  */
-void peer_manager_init(void)
+void gap_params_init(void)
 {
-    ble_gap_sec_params_t sec_param;
-    ret_code_t           err_code;
+    ret_code_t              err_code;
+    ble_gap_conn_params_t   gap_conn_params;
+    ble_gap_conn_sec_mode_t sec_mode;
 
-    err_code = pm_init();
+    BLE_GAP_CONN_SEC_MODE_SET_OPEN(&sec_mode);
+
+    err_code = sd_ble_gap_device_name_set(&sec_mode,
+                                          (const uint8_t *)DEVICE_NAME,
+                                          strlen(DEVICE_NAME));
     APP_ERROR_CHECK(err_code);
 
-    memset(&sec_param, 0, sizeof(ble_gap_sec_params_t));
-
-    // Security parameters to be used for all security procedures.
-    sec_param.bond           = SEC_PARAM_BOND;
-    sec_param.mitm           = SEC_PARAM_MITM;
-    sec_param.lesc           = SEC_PARAM_LESC;
-    sec_param.keypress       = SEC_PARAM_KEYPRESS;
-    sec_param.io_caps        = SEC_PARAM_IO_CAPABILITIES;
-    sec_param.oob            = SEC_PARAM_OOB;
-    sec_param.min_key_size   = SEC_PARAM_MIN_KEY_SIZE;
-    sec_param.max_key_size   = SEC_PARAM_MAX_KEY_SIZE;
-    sec_param.kdist_own.enc  = 1;
-    sec_param.kdist_own.id   = 1;
-    sec_param.kdist_peer.enc = 1;
-    sec_param.kdist_peer.id  = 1;
-
-    err_code = pm_sec_params_set(&sec_param);
+    err_code = sd_ble_gap_appearance_set(BLE_APPEARANCE_HID_KEYBOARD);
     APP_ERROR_CHECK(err_code);
 
-    err_code = pm_register(pm_evt_handler);
+    memset(&gap_conn_params, 0, sizeof(gap_conn_params));
+
+    gap_conn_params.min_conn_interval = MIN_CONN_INTERVAL;
+    gap_conn_params.max_conn_interval = MAX_CONN_INTERVAL;
+    gap_conn_params.slave_latency     = SLAVE_LATENCY;
+    gap_conn_params.conn_sup_timeout  = CONN_SUP_TIMEOUT;
+
+    err_code = sd_ble_gap_ppcp_set(&gap_conn_params);
     APP_ERROR_CHECK(err_code);
+}
+
+
+/**@brief Function for initializing the GATT module.
+ */
+void gatt_init(void)
+{
+    ret_code_t err_code = nrf_ble_gatt_init(&m_gatt, NULL);
+    APP_ERROR_CHECK(err_code);
+}
+
+
+/**@brief Function for putting the chip into sleep mode.
+ *
+ * @note This function will not return.
+ */
+void sleep_mode_enter(void)
+{
+    ret_code_t err_code;
+    // Go to system-off mode (this function will not return; wakeup will cause a reset).
+    err_code = sd_power_system_off();
+    APP_ERROR_CHECK(err_code);
+}
+
+
+/**@brief Function for setting filtered device identities.
+ *
+ * @param[in] skip  Filter passed to @ref pm_peer_id_list.
+ */
+void identities_set(pm_peer_id_list_skip_t skip)
+{
+    pm_peer_id_t peer_ids[BLE_GAP_DEVICE_IDENTITIES_MAX_COUNT];
+    uint32_t     peer_id_count = BLE_GAP_DEVICE_IDENTITIES_MAX_COUNT;
+
+    ret_code_t err_code = pm_peer_id_list(peer_ids, &peer_id_count, PM_PEER_ID_INVALID, skip);
+    APP_ERROR_CHECK(err_code);
+
+    err_code = pm_device_identities_list_set(peer_ids, peer_id_count);
+    APP_ERROR_CHECK(err_code);
+}
+
+
+/**@brief Function for handling advertising events.
+ *
+ * @details This function will be called for advertising events which are passed to the application.
+ *
+ * @param[in] ble_adv_evt  Advertising event.
+ */
+void on_adv_evt(ble_adv_evt_t ble_adv_evt)
+{
+    ret_code_t err_code;
+
+    switch (ble_adv_evt)
+    {
+        case BLE_ADV_EVT_DIRECTED_HIGH_DUTY:
+            NRF_LOG_INFO("High Duty Directed advertising.");
+            break;
+
+        case BLE_ADV_EVT_DIRECTED:
+            NRF_LOG_INFO("Directed advertising.");
+            break;
+
+        case BLE_ADV_EVT_FAST:
+            NRF_LOG_INFO("Fast advertising.");
+            break;
+
+        case BLE_ADV_EVT_SLOW:
+            NRF_LOG_INFO("Slow advertising.");
+            break;
+
+        case BLE_ADV_EVT_FAST_WHITELIST:
+            NRF_LOG_INFO("Fast advertising with whitelist.");
+            break;
+
+        case BLE_ADV_EVT_SLOW_WHITELIST:
+            NRF_LOG_INFO("Slow advertising with whitelist.");
+            break;
+
+        case BLE_ADV_EVT_IDLE:
+            sleep_mode_enter();
+            break;
+
+        case BLE_ADV_EVT_WHITELIST_REQUEST:
+        {
+            ble_gap_addr_t whitelist_addrs[BLE_GAP_WHITELIST_ADDR_MAX_COUNT];
+            ble_gap_irk_t  whitelist_irks[BLE_GAP_WHITELIST_ADDR_MAX_COUNT];
+            uint32_t       addr_cnt = BLE_GAP_WHITELIST_ADDR_MAX_COUNT;
+            uint32_t       irk_cnt  = BLE_GAP_WHITELIST_ADDR_MAX_COUNT;
+
+            err_code = pm_whitelist_get(whitelist_addrs, &addr_cnt,
+                                        whitelist_irks,  &irk_cnt);
+            APP_ERROR_CHECK(err_code);
+            NRF_LOG_DEBUG("pm_whitelist_get returns %d addr in whitelist and %d irk whitelist",
+                          addr_cnt, irk_cnt);
+
+            // Set the correct identities list (no excluding peers with no Central Address Resolution).
+            identities_set(PM_PEER_ID_LIST_SKIP_NO_IRK);
+
+            // Apply the whitelist.
+            err_code = ble_advertising_whitelist_reply(&m_advertising,
+                                                       whitelist_addrs,
+                                                       addr_cnt,
+                                                       whitelist_irks,
+                                                       irk_cnt);
+            APP_ERROR_CHECK(err_code);
+        } break; //BLE_ADV_EVT_WHITELIST_REQUEST
+
+        case BLE_ADV_EVT_PEER_ADDR_REQUEST:
+        {
+            pm_peer_data_bonding_t peer_bonding_data;
+
+            // Only Give peer address if we have a handle to the bonded peer.
+            if (m_peer_id != PM_PEER_ID_INVALID)
+            {
+                err_code = pm_peer_data_bonding_load(m_peer_id, &peer_bonding_data);
+                if (err_code != NRF_ERROR_NOT_FOUND)
+                {
+                    APP_ERROR_CHECK(err_code);
+
+                    // Manipulate identities to exclude peers with no Central Address Resolution.
+                    identities_set(PM_PEER_ID_LIST_SKIP_ALL);
+
+                    ble_gap_addr_t * p_peer_addr = &(peer_bonding_data.peer_ble_id.id_addr_info);
+                    err_code = ble_advertising_peer_addr_reply(&m_advertising, p_peer_addr);
+                    APP_ERROR_CHECK(err_code);
+                }
+            }
+        } break; //BLE_ADV_EVT_PEER_ADDR_REQUEST
+
+        default:
+            break;
+    }
+}
+
+
+/**@brief Function for handling advertising errors.
+ *
+ * @param[in] nrf_error  Error code containing information about what went wrong.
+ */
+void ble_advertising_error_handler(uint32_t nrf_error)
+{
+    APP_ERROR_HANDLER(nrf_error);
 }
 
 
@@ -1302,12 +1159,163 @@ void advertising_init(void)
 }
 
 
-
-/**@brief Function for initializing power management.
+/**@brief Function for handling a Connection Parameters error.
+ *
+ * @param[in]   nrf_error   Error code containing information about what went wrong.
  */
-void power_management_init(void)
+void conn_params_error_handler(uint32_t nrf_error)
 {
-    ret_code_t err_code;
-    err_code = nrf_pwr_mgmt_init();
+    APP_ERROR_HANDLER(nrf_error);
+}
+
+
+/**@brief Function for initializing the Connection Parameters module.
+ */
+void conn_params_init(void)
+{
+    ret_code_t             err_code;
+    ble_conn_params_init_t cp_init;
+
+    memset(&cp_init, 0, sizeof(cp_init));
+
+    cp_init.p_conn_params                  = NULL;
+    cp_init.first_conn_params_update_delay = FIRST_CONN_PARAMS_UPDATE_DELAY;
+    cp_init.next_conn_params_update_delay  = NEXT_CONN_PARAMS_UPDATE_DELAY;
+    cp_init.max_conn_params_update_count   = MAX_CONN_PARAMS_UPDATE_COUNT;
+    cp_init.start_on_notify_cccd_handle    = BLE_GATT_HANDLE_INVALID;
+    cp_init.disconnect_on_fail             = false;
+    cp_init.evt_handler                    = NULL;
+    cp_init.error_handler                  = conn_params_error_handler;
+
+    err_code = ble_conn_params_init(&cp_init);
     APP_ERROR_CHECK(err_code);
 }
+
+
+/**@brief Function for setting filtered whitelist.
+ *
+ * @param[in] skip  Filter passed to @ref pm_peer_id_list.
+ */
+void whitelist_set(pm_peer_id_list_skip_t skip)
+{
+    pm_peer_id_t peer_ids[BLE_GAP_WHITELIST_ADDR_MAX_COUNT];
+    uint32_t     peer_id_count = BLE_GAP_WHITELIST_ADDR_MAX_COUNT;
+
+    ret_code_t err_code = pm_peer_id_list(peer_ids, &peer_id_count, PM_PEER_ID_INVALID, skip);
+    APP_ERROR_CHECK(err_code);
+
+    NRF_LOG_INFO("\tm_whitelist_peer_cnt %d, MAX_PEERS_WLIST %d",
+                   peer_id_count + 1,
+                   BLE_GAP_WHITELIST_ADDR_MAX_COUNT);
+
+    err_code = pm_whitelist_set(peer_ids, peer_id_count);
+    APP_ERROR_CHECK(err_code);
+}
+
+
+/**@brief Function for handling Peer Manager events.
+ *
+ * @param[in] p_evt  Peer Manager event.
+ */
+void pm_evt_handler(pm_evt_t const * p_evt)
+{
+    pm_handler_on_pm_evt(p_evt);
+    pm_handler_flash_clean(p_evt);
+
+    switch (p_evt->evt_id)
+    {
+        case PM_EVT_CONN_SEC_SUCCEEDED:
+            m_peer_id = p_evt->peer_id;
+            break;
+
+        case PM_EVT_PEERS_DELETE_SUCCEEDED:
+            advertising_start(false);
+            break;
+
+        case PM_EVT_PEER_DATA_UPDATE_SUCCEEDED:
+            if (     p_evt->params.peer_data_update_succeeded.flash_changed
+                 && (p_evt->params.peer_data_update_succeeded.data_id == PM_PEER_DATA_ID_BONDING))
+            {
+                NRF_LOG_INFO("New Bond, add the peer to the whitelist if possible");
+                // Note: You should check on what kind of white list policy your application should use.
+
+                whitelist_set(PM_PEER_ID_LIST_SKIP_NO_ID_ADDR);
+            }
+            break;
+
+        default:
+            break;
+    }
+}
+
+
+/**@brief Function for the Peer Manager initialization.
+ */
+void peer_manager_init(void)
+{
+    ble_gap_sec_params_t sec_param;
+    ret_code_t           err_code;
+
+    err_code = pm_init();
+    APP_ERROR_CHECK(err_code);
+
+    memset(&sec_param, 0, sizeof(ble_gap_sec_params_t));
+
+    // Security parameters to be used for all security procedures.
+    sec_param.bond           = SEC_PARAM_BOND;
+    sec_param.mitm           = SEC_PARAM_MITM;
+    sec_param.lesc           = SEC_PARAM_LESC;
+    sec_param.keypress       = SEC_PARAM_KEYPRESS;
+    sec_param.io_caps        = SEC_PARAM_IO_CAPABILITIES;
+    sec_param.oob            = SEC_PARAM_OOB;
+    sec_param.min_key_size   = SEC_PARAM_MIN_KEY_SIZE;
+    sec_param.max_key_size   = SEC_PARAM_MAX_KEY_SIZE;
+    sec_param.kdist_own.enc  = 1;
+    sec_param.kdist_own.id   = 1;
+    sec_param.kdist_peer.enc = 1;
+    sec_param.kdist_peer.id  = 1;
+
+    err_code = pm_sec_params_set(&sec_param);
+    APP_ERROR_CHECK(err_code);
+
+    err_code = pm_register(pm_evt_handler);
+    APP_ERROR_CHECK(err_code);
+}
+
+
+
+
+
+/**@brief Clear bond information from persistent storage.
+ */
+void delete_bonds(void)
+{
+    ret_code_t err_code;
+
+    NRF_LOG_INFO("Erase bonds!");
+
+    err_code = pm_peers_delete();
+    APP_ERROR_CHECK(err_code);
+}
+
+
+
+/**@brief Function for starting advertising.
+ */
+void advertising_start(bool erase_bonds)
+{
+    if (erase_bonds == true)
+    {
+        delete_bonds();
+        // Advertising is started by PM_EVT_PEERS_DELETE_SUCCEEDED event.
+    }
+    else
+    {
+        whitelist_set(PM_PEER_ID_LIST_SKIP_NO_ID_ADDR);
+        NRF_LOG_INFO("whitelist_set");
+        ret_code_t ret = ble_advertising_start(&m_advertising, BLE_ADV_MODE_FAST);
+        NRF_LOG_INFO("ble_advertising_start");
+        APP_ERROR_CHECK(ret);
+    }
+}
+

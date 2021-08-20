@@ -14,7 +14,7 @@
     void buffer_init(void);
     void peer_manager_init(void);
 
-    void timers_start(void);
+    void batt_timers_start(void);
     void advertising_start(bool erase_bonds);
 
     void keys_send(uint8_t key_pattern_len, uint8_t * p_key_pattern);

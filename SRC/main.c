@@ -56,6 +56,10 @@
 //Std Headers
 #include <stdint.h>
 #include <string.h>
+//Log Headers
+#include "nrf_log.h"
+#include "nrf_log_ctrl.h"
+#include "nrf_log_default_backends.h"
 //SDK Headers
 #include "nrf_pwr_mgmt.h"
 #include "app_timer.h"
@@ -67,15 +71,22 @@
 //Own Headers
 #include "board_support.h"
 #include "ble_service.h"
-#include "kb_nrf_print.h"
 #include "kb_nrf_driver.h"
+#include "nrf_pwr_mgmt.h"
+
+static void log_init(void)
+{
+    ret_code_t err_code = NRF_LOG_INIT(NULL);
+    APP_ERROR_CHECK(err_code);
+    NRF_LOG_DEFAULT_BACKENDS_INIT();
+}
 
 
 /**@brief Function for the Timer initialization.
  *
  * @details Initializes the timer module.
  */
-void timers_init(void)
+static void timers_init(void)
 {
     ret_code_t err_code;
     err_code = app_timer_init();
@@ -125,7 +136,6 @@ void init_and_start_scan_timer(void)
 }
 
 
-
 /**@brief Function for application main entry.
  */
 int main(void)
@@ -138,27 +148,27 @@ int main(void)
     board_init();
 
     timers_init();
-    scheduler_init();
-
     power_management_init();
-
+     
     ble_stack_init();
+    scheduler_init();
     gap_params_init();
     gatt_init();
-    advertising_init();
-    services_init();
 
+    advertising_init();
     conn_params_init();
-    buffer_init();
     peer_manager_init();
 
+    buffer_init();
+    services_init();
     // Start execution.
-    kb_nrf_print("TMK Keyboard Start");
+    NRF_LOG_INFO("TMK Keyboard Start");
 
-    advertising_start(erase_bonds);
     keyboard_init();
     host_set_driver(&kb_nrf_driver);
     init_and_start_scan_timer();
+
+    advertising_start(erase_bonds);
     //power management init and start
 
     // Enter main loop.
