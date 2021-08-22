@@ -169,6 +169,9 @@ int main(void)
     init_and_start_scan_timer();
 
     advertising_start(erase_bonds);
+
+    kb_power_meas_init();
+    kb_power_meas_start();
     //power management init and start
 
     // Enter main loop.

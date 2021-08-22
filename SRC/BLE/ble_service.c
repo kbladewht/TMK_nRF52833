@@ -72,7 +72,6 @@
 #include "ble_bas.h"
 #include "ble_dis.h"
 #include "ble_conn_params.h"
-#include "sensorsim.h"
 
 #include "app_scheduler.h"
 #include "nrf_sdh.h"
@@ -86,6 +85,8 @@
 #include "nrf_ble_qwr.h"
 #include "nrf_pwr_mgmt.h"
 #include "peer_manager_handler.h"
+#include "nrf_drv_saadc.h"
+#include "nrfx_saadc.h"
 
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
@@ -162,6 +163,7 @@
 
 #define MAX_KEYS_IN_ONE_REPORT              (INPUT_REPORT_KEYS_MAX_LEN - SCAN_CODE_POS)/**< Maximum number of key presses that can be sent in one Input Report. */
 
+
 /**Buffer queue access macros
  *
  * @{ */
@@ -212,6 +214,7 @@ typedef struct
 
 STATIC_ASSERT(sizeof(buffer_list_t) % 4 == 0);
 
+
 /*Define BLE Services*/
 APP_TIMER_DEF(m_battery_timer_id);                                  /**< Battery timer. */
 BLE_HIDS_DEF(m_hids,                                                /**< Structure used to identify the HID service. */
@@ -226,11 +229,11 @@ BLE_ADVERTISING_DEF(m_advertising);                                 /**< Adverti
 
 static bool              m_in_boot_mode = false;                    /**< Current protocol mode. */
 static uint16_t          m_conn_handle  = BLE_CONN_HANDLE_INVALID;  /**< Handle of the current connection. */
-static sensorsim_cfg_t   m_battery_sim_cfg;                         /**< Battery Level sensor simulator configuration. */
-static sensorsim_state_t m_battery_sim_state;                       /**< Battery Level sensor simulator state. */
 static bool              m_caps_on = false;                         /**< Variable to indicate if Caps Lock is turned on. */
 static pm_peer_id_t      m_peer_id;                                 /**< Device reference handle to the current bonded central. */
 static buffer_list_t     buffer_list;                               /**< List to enqueue not just data to be sent, but also related information like the handle, connection handle etc */
+
+static nrf_saadc_value_t adc_buf[2];                                /*buffer of adc value*/
 
 static ble_uuid_t m_adv_uuids[] = {{BLE_UUID_HUMAN_INTERFACE_DEVICE_SERVICE, BLE_UUID_TYPE_BLE}};
 
@@ -291,44 +294,7 @@ void dis_init(void)
 }
 
 
-/*----------Batt Service----------*/
-
-
-/**@brief Function for performing a battery measurement, and update the Battery Level characteristic in the Battery Service.
- */
-void battery_level_update(void)
-{
-    ret_code_t err_code;
-    uint8_t  battery_level;
-
-    battery_level = (uint8_t)sensorsim_measure(&m_battery_sim_state, &m_battery_sim_cfg);
-
-    err_code = ble_bas_battery_level_update(&m_bas, battery_level, BLE_CONN_HANDLE_ALL);
-    if ((err_code != NRF_SUCCESS) &&
-        (err_code != NRF_ERROR_BUSY) &&
-        (err_code != NRF_ERROR_RESOURCES) &&
-        (err_code != NRF_ERROR_FORBIDDEN) &&
-        (err_code != NRF_ERROR_INVALID_STATE) &&
-        (err_code != BLE_ERROR_GATTS_SYS_ATTR_MISSING)
-       )
-    {
-        APP_ERROR_HANDLER(err_code);
-    }
-}
-
-
-/**@brief Function for handling the Battery measurement timer timeout.
- *
- * @details This function will be called each time the battery level measurement timer expires.
- *
- * @param[in]   p_context   Pointer used for passing some arbitrary information (context) from the
- *                          app_start_timer() call to the timeout handler.
- */
-void battery_level_meas_timeout_handler(void * p_context)
-{
-    UNUSED_PARAMETER(p_context);
-    battery_level_update();
-}
+/*----------Bas Service----------*/
 
 
 /**@brief Function for initializing Battery Service.
@@ -354,14 +320,148 @@ void bas_init(void)
 }
 
 
-/**@brief Function for starting timers.
- */
-void batt_timers_start(void)
+// Initialized state
+static bool saadc_initialized = false;
+
+// Saadc config
+static nrf_saadc_channel_config_t kb_battery_channel_config = {
+    .resistor_p = NRF_SAADC_RESISTOR_DISABLED,
+    .resistor_n = NRF_SAADC_RESISTOR_DISABLED,
+    .gain = NRF_SAADC_GAIN1_5,
+    .reference = NRF_SAADC_REFERENCE_INTERNAL,
+    .acq_time = NRF_SAADC_ACQTIME_10US,
+    .mode = NRF_SAADC_MODE_SINGLE_ENDED,
+    .burst = NRF_SAADC_BURST_DISABLED,
+    .pin_p = (nrf_saadc_input_t)(BATTERY_PIN),
+    .pin_n = NRF_SAADC_INPUT_DISABLED
+};
+
+
+static const nrfx_saadc_config_t saadc_config = NRFX_SAADC_DEFAULT_CONFIG;
+#define SAMPLES_IN_BUFFER 4
+static nrf_saadc_value_t buffer_pool[2][SAMPLES_IN_BUFFER];
+
+
+// power percentage func
+static uint8_t trans_voltage_to_percent(uint16_t voltage)
+{
+    uint8_t percentage = 255; //indicates wrong result
+    if (voltage > 4100){
+        percentage = 100;
+    }
+    else if (voltage >= 3335){
+        percentage = 15 + (voltage - 3335) / 9;
+    }
+    else if (voltage >= 2900){
+        percentage = (voltage - 2900) / 29;
+    }
+    else if (voltage < 2900){
+        percentage = 0;
+    }
+    return percentage;
+}
+
+
+static void adc_result_handler(nrf_saadc_value_t value)
+{
+    //saadc measure value = voltage * gain / reference * 2^10
+    //gain = 1/5
+    //reference = 0.6V
+    //because on board the sample voltage is half of battery voltage
+    //voltage in mV is value / 0.2 * 0.6 / 1024 * 1000 * 2 = value * 2.93 * 2
+    uint16_t voltage = value * 2.93 * 2;
+    uint8_t percentage = trans_voltage_to_percent(voltage);
+    ret_code_t err_code = ble_bas_battery_level_update(&m_bas, percentage, BLE_CONN_HANDLE_ALL);
+    if ((err_code != NRF_SUCCESS) && 
+        (err_code != NRF_ERROR_INVALID_STATE) && 
+        (err_code != NRF_ERROR_RESOURCES) && 
+        (err_code != NRF_ERROR_BUSY) && 
+        (err_code != BLE_ERROR_GATTS_SYS_ATTR_MISSING)){
+        APP_ERROR_HANDLER(err_code);
+    }
+    //NRF_LOG_INFO("%d %d", voltage, percentage);
+}
+
+
+void adc_evt_cb(nrfx_saadc_evt_t const* event)
+{
+    nrf_saadc_value_t result = 0;
+
+    if (event->type != NRFX_SAADC_EVT_DONE) {
+      return;
+    }
+
+    ret_code_t err_code;
+    // reload Buffer
+    err_code = nrfx_saadc_buffer_convert(event->data.done.p_buffer, SAMPLES_IN_BUFFER);
+    APP_ERROR_CHECK(err_code);
+
+    // get average result
+    for (uint8_t j = 0; j < SAMPLES_IN_BUFFER; j++) {
+        result += event->data.done.p_buffer[j];
+    }
+    
+
+    adc_result_handler(result/SAMPLES_IN_BUFFER);
+
+    nrfx_saadc_uninit();
+    saadc_initialized = false;
+}
+
+
+/* init adc to mesure voltage */
+static void saadc_init()
 {
     ret_code_t err_code;
 
+    err_code = nrfx_saadc_init(&saadc_config, adc_evt_cb);
+    APP_ERROR_CHECK(err_code);
+
+    err_code = nrfx_saadc_channel_init(0, &kb_battery_channel_config);
+    APP_ERROR_CHECK(err_code);
+
+    err_code = nrfx_saadc_buffer_convert(buffer_pool[0], SAMPLES_IN_BUFFER);
+    APP_ERROR_CHECK(err_code);
+
+    err_code = nrfx_saadc_buffer_convert(buffer_pool[1], SAMPLES_IN_BUFFER);
+    APP_ERROR_CHECK(err_code);
+}
+
+
+void battery_level_meas_timeout_handler(void * p_context)
+{
+    bool measure_started = true;
+
+    if (measure_started) {
+        if (!saadc_initialized) {
+            saadc_initialized = !saadc_initialized;
+            saadc_init();
+        }
+        // sampling
+        measure_started = !measure_started;
+        nrfx_err_t err_code = nrfx_saadc_sample();
+        APP_ERROR_CHECK(err_code);
+    }
+}
+
+
+void kb_power_meas_init()
+{
+    ret_code_t err_code;
+    // Create battery timer.
+    err_code = app_timer_create(&m_battery_timer_id,
+                                APP_TIMER_MODE_REPEATED,
+                                battery_level_meas_timeout_handler);
+    APP_ERROR_CHECK(err_code);
+}
+
+
+void kb_power_meas_start()
+{
+    ret_code_t err_code;
     err_code = app_timer_start(m_battery_timer_id, BATTERY_LEVEL_MEAS_INTERVAL, NULL);
     APP_ERROR_CHECK(err_code);
+    NRF_LOG_INFO("power measurement start");
 }
 
 

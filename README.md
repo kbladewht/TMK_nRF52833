@@ -1,13 +1,15 @@
 # TMK_nRF52833
 Running TMK on nRF52833  
 
+# Hardware Design
+https://oshwhub.com/Pismis24/nrf52833-subboard  
+
 ## Current Status
 TMK fitted  
+BLE Battery Service(Done)    
 
-## Next Step
-Ble services: battery voltage measurement  
-Power management  
+## Future Features 
 State light control(Caplck, BT conn)  
-Backlight Control(single color, only luminance adjustment, with PWM)  
+Backlight Control(Using PWM to contral luminance)  
 Encoder  
 dual Mod: BLE HID and USB HID  
