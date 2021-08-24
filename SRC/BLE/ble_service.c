@@ -92,6 +92,8 @@
 #include "nrf_log_ctrl.h"
 #include "nrf_log_default_backends.h"
 
+#include "board_support.h"
+
 
 #define DEVICE_NAME                         "nRF52833_Keyboard"                        /**< Name of device. Will be included in the advertising data. */
 #define MANUFACTURER_NAME                   "NordicSemiconductor"                      /**< Manufacturer. Will be passed to Device Information Service. */
@@ -367,9 +369,9 @@ static void adc_result_handler(nrf_saadc_value_t value)
     //saadc measure value = voltage * gain / reference * 2^10
     //gain = 1/5
     //reference = 0.6V
-    //because on board the sample voltage is half of battery voltage
-    //voltage in mV is value / 0.2 * 0.6 / 1024 * 1000 * 2 = value * 2.93 * 2
-    uint16_t voltage = value * 2.93 * 2;
+    //using VDDH as sense pin and get VDDH/5
+    //voltage in mV is value / 0.2 * 0.6 / 1024 * 1000 * 5 = value * 2.93 * 5
+    uint16_t voltage = value * 2.93 * 5;
     uint8_t percentage = trans_voltage_to_percent(voltage);
     ret_code_t err_code = ble_bas_battery_level_update(&m_bas, percentage, BLE_CONN_HANDLE_ALL);
     if ((err_code != NRF_SUCCESS) && 
@@ -379,7 +381,7 @@ static void adc_result_handler(nrf_saadc_value_t value)
         (err_code != BLE_ERROR_GATTS_SYS_ATTR_MISSING)){
         APP_ERROR_HANDLER(err_code);
     }
-    //NRF_LOG_INFO("%d %d", voltage, percentage);
+    NRF_LOG_INFO("%d %d %d", value, voltage, percentage);
 }
 
 

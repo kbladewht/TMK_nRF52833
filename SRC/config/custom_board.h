@@ -52,7 +52,7 @@ extern "C" {
 #define BLCP NRF_GPIO_PIN_MAP(0, 28)
 
 //用哪个Analog通道读电池电压
-#define BATTERY_PIN NRF_SAADC_INPUT_AIN7
+#define BATTERY_PIN NRF_SAADC_INPUT_VDDHDIV5
 
 #ifdef __cplusplus
 }
