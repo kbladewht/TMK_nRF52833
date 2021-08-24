@@ -21,4 +21,5 @@
     void kb_power_meas_start(void);
 
     void keys_send(uint8_t key_pattern_len, uint8_t * p_key_pattern);
+    uint8_t led_stats_get(void);
 #endif

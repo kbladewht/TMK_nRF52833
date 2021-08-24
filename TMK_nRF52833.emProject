@@ -65,6 +65,7 @@
         <file file_name="SRC/Protocol/keymap_common.h" />
         <file file_name="SRC/Protocol/keymap_plain.c" />
         <file file_name="SRC/Protocol/boot_loader.c" />
+        <file file_name="SRC/Protocol/kb_nrf_led.h" />
       </folder>
       <folder Name="Driver">
         <file file_name="SRC/Driver/kb_nrf_driver.c" />

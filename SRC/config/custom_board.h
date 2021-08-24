@@ -16,7 +16,7 @@ extern "C" {
 
 
 //State indicatior LED gpio
-#define STATE_LED NRF_GPIO_PIN_MAP(0, 25)
+#define STATE_LED NRF_GPIO_PIN_MAP(0, 3)
 #define STATE_LED_ACTIVE 1 //当需要亮灯时该pin输出高，使板子上对应的nmos导通
 
 //矩阵脚，板子上的30PINFPC母座从左往右数第四个开始定义为第一个，共21个

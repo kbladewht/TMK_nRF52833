@@ -1,7 +1,12 @@
+#include <stdbool.h>
+
 #include "host.h"
 #include "host_driver.h"
+
+#include "ble_service.h"
 #include "kb_nrf_driver.h"
 #include "kb_nrf_keyboard.h"
+#include "kb_nrf_led.h"
 
 /* Host driver */
 static uint8_t keyboard_leds(void);
@@ -21,8 +26,7 @@ host_driver_t kb_nrf_driver = {
 // 用来设置led的暂时可以为nil
 static uint8_t keyboard_leds(void)
 {
-    //return keyboard.leds();
-    return 0;
+    led_stats_get();
 }
 static void send_keyboard(report_keyboard_t *report)
 {

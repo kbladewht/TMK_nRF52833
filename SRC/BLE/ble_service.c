@@ -137,7 +137,7 @@
 #define OUTPUT_REPORT_INDEX                 0                                          /**< Index of Output Report. */
 #define OUTPUT_REPORT_MAX_LEN               1                                          /**< Maximum length of Output Report. */
 #define INPUT_REPORT_KEYS_INDEX             0                                          /**< Index of Input Report. */
-#define OUTPUT_REPORT_BIT_MASK_CAPS_LOCK    0x02                                       /**< CAPS LOCK bit in Output Report (based on 'LED Page (0x08)' of the Universal Serial Bus HID Usage Tables). */
+
 #define INPUT_REP_REF_ID                    0                                          /**< Id of reference to Keyboard Input Report. */
 #define OUTPUT_REP_REF_ID                   0                                          /**< Id of reference to Keyboard Output Report. */
 #define FEATURE_REP_REF_ID                  0                                          /**< ID of reference to Keyboard Feature Report. */
@@ -668,12 +668,14 @@ uint32_t buffer_dequeue(bool tx_flag)
  *
  * @param[in]   p_evt   HID service event.
  */
+static uint8_t report_val = 0; //keep the hid stats
+  
 void on_hid_rep_char_write(ble_hids_evt_t * p_evt)
 {
     if (p_evt->params.char_write.char_id.rep_type == BLE_HIDS_REP_TYPE_OUTPUT)
     {
         ret_code_t err_code;
-        uint8_t  report_val;
+        
         uint8_t  report_index = p_evt->params.char_write.char_id.rep_index;
 
         if (report_index == OUTPUT_REPORT_INDEX)
@@ -691,6 +693,12 @@ void on_hid_rep_char_write(ble_hids_evt_t * p_evt)
             APP_ERROR_CHECK(err_code);
         }
     }
+}
+
+//func of hid stats
+uint8_t led_stats_get(void)
+{
+    return report_val;
 }
 
 
