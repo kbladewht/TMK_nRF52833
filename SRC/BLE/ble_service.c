@@ -161,7 +161,7 @@
 
 #define MODIFIER_KEY_POS                    0                                          /**< Position of the modifier byte in the Input Report. */
 #define SCAN_CODE_POS                       2                                          /**< The start position of the key scan code in a HID Report. */
-#define SHIFT_KEY_CODE                      0x02                                       /**< Key code indicating the press of the Shift Key. */
+
 
 #define MAX_KEYS_IN_ONE_REPORT              (INPUT_REPORT_KEYS_MAX_LEN - SCAN_CODE_POS)/**< Maximum number of key presses that can be sent in one Input Report. */
 
@@ -1104,6 +1104,9 @@ void gatt_init(void)
 void sleep_mode_enter(void)
 {
     ret_code_t err_code;
+    err_code = board_wake_up_buttom_prepare();
+    APP_ERROR_CHECK(err_code);
+
     // Go to system-off mode (this function will not return; wakeup will cause a reset).
     err_code = sd_power_system_off();
     APP_ERROR_CHECK(err_code);

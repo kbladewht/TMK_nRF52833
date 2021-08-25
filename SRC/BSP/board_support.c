@@ -84,8 +84,44 @@ bool indicator_led_is_active(void)
     }
 }
 
+
+//Init board func
 void board_init()
 {
     gpio_output_voltage_setup();
     indicator_led_init();
+}
+
+
+//Board wakeup prepare: setting gpios to sense
+uint32_t board_wake_up_buttom_prepare(void)
+{
+    static nrf_gpio_pin_pull_t col_pull_config;
+    static nrf_gpio_pin_sense_t col_sense_config;
+    static bool row_state;
+    if(DIODES_DIRECTION){ //当二极管方向是从行到列时，列开启下拉电阻，上升沿感知，行输出高电平
+        col_pull_config = NRF_GPIO_PIN_PULLDOWN;
+        col_sense_config = NRF_GPIO_PIN_SENSE_HIGH;
+        row_state = true;
+    }
+    else{
+        col_pull_config = NRF_GPIO_PIN_PULLUP;
+        col_sense_config = NRF_GPIO_PIN_SENSE_LOW;
+        row_state = false;
+    }
+    //设置列为sense
+    for(uint8_t idx = 0; idx < MATRIX_COLS; idx++){
+        nrf_gpio_cfg_sense_input(col_pins[idx], col_pull_config, col_sense_config);
+    }
+    //设置行输出状态
+    for(uint8_t idx = 0; idx < MATRIX_ROWS; idx++){
+        nrf_gpio_cfg_output(row_pins[idx]);
+        if(row_state){
+            nrf_gpio_pin_set(row_pins[idx]);
+        }
+        else{
+            nrf_gpio_pin_clear(row_pins[idx]);
+        }
+    }
+    return NRF_SUCCESS;
 }
